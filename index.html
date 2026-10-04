@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atelier musique</title>
+  <meta name="description" content="Entraînement de l'oreille, lecture de notes, gammes sur le manche et arrangement guitare de partitions.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">🎵 Atelier musique</a>
+    <nav class="sections" aria-label="Sections">
+      <div class="section-group" data-section="theorie">
+        <span class="section-title">Théorie</span>
+        <a href="#/theorie/oreille">Oreille</a>
+        <a href="#/theorie/lecture">Lecture de notes</a>
+        <a href="#/theorie/gammes">Gammes</a>
+      </div>
+      <div class="section-group" data-section="guitare">
+        <span class="section-title">Guitare</span>
+        <a href="#/guitare/manche">Gammes sur le manche</a>
+        <a href="#/guitare/accompagnement">Partition → accompagnement</a>
+      </div>
+    </nav>
+    <label class="notation-toggle" title="Nom des notes">
+      <select id="notation-select" aria-label="Nom des notes">
+        <option value="fr">Do Ré Mi</option>
+        <option value="en">C D E</option>
+      </select>
+    </label>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <script src="js/core/music.js"></script>
+  <script src="js/core/audio.js"></script>
+  <script src="js/core/staff.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/theory/ear.js"></script>
+  <script src="js/theory/reading.js"></script>
+  <script src="js/theory/scales.js"></script>
+  <script src="js/guitar/chords.js"></script>
+  <script src="js/guitar/fretboard.js"></script>
+  <script src="js/guitar/rhythms.js"></script>
+  <script src="js/guitar/score-import.js"></script>
+  <script src="js/guitar/harmonizer.js"></script>
+  <script src="js/guitar/sheet-pdf.js"></script>
+  <script src="js/guitar/arranger.js"></script>
+  <script>App.start();</script>
+</body>
+</html>
