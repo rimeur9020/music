@@ -17,6 +17,11 @@
   ];
   const COMMON_ROOTS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
+  function fretsText(frets) {
+    const big = frets.some((f) => f > 9);
+    return frets.map((f) => (f === X ? 'x' : String(f))).join(big ? ' ' : '');
+  }
+
   function render(el) {
     const st = Object.assign({ level: 0, rootBass: true, showNames: false, best: 0 }, App.store('chordGame', {}));
     const save = () => App.save('chordGame', st);
@@ -144,7 +149,7 @@
       boardWrap.innerHTML = '';
       boardWrap.appendChild(svg);
       const midis = frets.map((f, i) => (f === X ? null : TUNING[i] + f)).filter((m) => m != null);
-      played.textContent = midis.length ? 'Cases : ' + ChordDict.fretsText(frets) + (st.showNames ? '  ·  notes : ' + midis.map((m) => M.noteName(M.spellPc(m, false))).join(' ') : '') : 'Aucune corde jouée pour l’instant.';
+      played.textContent = midis.length ? 'Cases : ' + fretsText(frets) + (st.showNames ? '  ·  notes : ' + midis.map((m) => M.noteName(M.spellPc(m, false))).join(' ') : '') : 'Aucune corde jouée pour l’instant.';
     }
 
     function check() {
@@ -206,7 +211,7 @@
       if (!done) { score.total++; score.streak = 0; }
       done = true;
       fb.className = 'feedback info';
-      fb.textContent = 'Un doigté possible pour ' + M.chordName(target) + ' : ' + ChordDict.fretsText(frets) + '. Il en existe d’autres ailleurs sur le manche !';
+      fb.textContent = 'Un doigté possible pour ' + M.chordName(target) + ' : ' + fretsText(frets) + '. Il en existe d’autres ailleurs sur le manche !';
       checkBtn.textContent = 'Accord suivant →';
       drawStats();
       drawBoard();

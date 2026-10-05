@@ -124,9 +124,7 @@
       playTog.addEventListener('click', () => list.forEach((x) => Audio2.play(x.midi, { dur: 1.8 })));
       const playArp = h('button', { class: 'btn', text: '▶ Arpège' });
       playArp.addEventListener('click', () => Audio2.playSequence(list.map((x) => x.midi), { gap: 0.3, dur: 0.9 }));
-      const gtr = h('a', { class: 'btn', href: '#/guitare/accords', text: '🎸 Doigtés à la guitare' });
-      gtr.addEventListener('click', () => App.save('dictSel', Object.assign(App.store('dictSel', {}), { tab: 'all', root: sel.root, type: sel.type })));
-      builder.appendChild(h('div', { class: 'btn-row', style: 'margin-top:.75rem' }, [playTog, playArp, gtr]));
+      builder.appendChild(h('div', { class: 'btn-row', style: 'margin-top:.75rem' }, [playTog, playArp]));
     }
     drawBuilder();
 

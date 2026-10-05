@@ -74,7 +74,6 @@
     el.appendChild(h('div', { class: 'grid cards' }, [
       card('#/guitare/notes-manche', '🧠', 'Notes du manche', 'Mémorise les notes des 12 premières cases : explications, repères et jeu.'),
       card('#/guitare/manche', '🎸', 'Gammes sur le manche', 'Toutes les gammes sur le manche, par position, avec les fondamentales en évidence.'),
-      card('#/guitare/accords', '📖', 'Dictionnaire d’accords', 'Mes accords, les accords ouverts, et tous les accords dans toutes les tonalités.'),
       card('#/guitare/jeu-accords', '🎮', 'Jeu : construis l’accord', 'Un nom d’accord s’affiche : place les doigts sur le manche pour le jouer.'),
       card('#/guitare/accompagnement', '📄', 'Partition → accompagnement', 'Importe ou scanne une partition : accords, rythmique selon le style, fiche PDF d’une page.')
     ]));
