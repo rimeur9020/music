@@ -155,5 +155,40 @@
     return svg;
   }
 
-  window.Chords = { voicing, diagramPrims, diagramSVG, TUNING, X };
+  /** Tous les doigtés connus d'un accord : ouvert, forme de Mi (6e corde), forme de La (5e corde). */
+  function allVoicings(ch) {
+    const pc = M.pcOf(ch.root);
+    const out = [];
+    const o = OPEN[pc + ':' + ch.type];
+    if (o) {
+      const v = Array.isArray(o) ? { frets: o, barre: 0 } : { frets: o.f, barre: o.barre };
+      if (v.barre) v.barreFrom = v.frets.findIndex((f) => f === v.barre);
+      out.push(Object.assign(v, { label: 'Ouvert' }));
+    }
+    const add = (shapes, r, rs, label) => {
+      if (!shapes[ch.type]) return;
+      let v = fromShape(shapes[ch.type], r, rs);
+      if (!v || Math.max(...v.frets) === 0) v = fromShape(shapes[ch.type], r + 12, rs);
+      if (v && !out.some((x) => x.frets.join() === v.frets.join())) out.push(Object.assign(v, { label }));
+    };
+    add(E_SHAPES, M.mod(pc - 4, 12), 0, 'Fondamentale sur la 6e corde');
+    add(A_SHAPES, M.mod(pc - 9, 12), 1, 'Fondamentale sur la 5e corde');
+    out.forEach((v) => { v.midis = v.frets.map((f, i) => (f === X ? null : TUNING[i] + f)); });
+    return out;
+  }
+
+  /** Liste des accords ouverts : [{ chord, voicing }] */
+  function openChords() {
+    return Object.keys(OPEN).map((k) => {
+      const [pc, type] = k.split(':');
+      const root = M.spellPc(+pc, [10, 3, 8].indexOf(+pc) >= 0);
+      const o = OPEN[k];
+      const v = Array.isArray(o) ? { frets: o, barre: 0 } : { frets: o.f, barre: o.barre };
+      if (v.barre) v.barreFrom = v.frets.findIndex((f) => f === v.barre);
+      v.midis = v.frets.map((f, i) => (f === X ? null : TUNING[i] + f));
+      return { chord: { root, type }, voicing: v, barreChord: !!v.barre };
+    });
+  }
+
+  window.Chords = { voicing, allVoicings, openChords, diagramPrims, diagramSVG, TUNING, X, E_SHAPES, A_SHAPES };
 })();

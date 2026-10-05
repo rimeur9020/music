@@ -26,7 +26,8 @@
     const clef = CLEFS[opts.clef || 'treble'];
     const spacing = opts.spacing || 46;
     const left = 70;
-    const width = opts.width || Math.max(240, left + 30 + notes.length * spacing);
+    const cols = notes.reduce((a, n, i) => Math.max(a, (n.col != null ? n.col : i) + 1), 0);
+    const width = opts.width || Math.max(240, left + 30 + cols * spacing);
     const top = SP * 5; // place pour les lignes supplémentaires
     const height = top + SP * 4 + SP * 5;
     const bottomY = top + SP * 4;
@@ -46,7 +47,7 @@
     }, clef.glyph));
 
     notes.forEach((n, i) => {
-      const x = left + spacing / 2 + i * spacing;
+      const x = left + spacing / 2 + (n.col != null ? n.col : i) * spacing + (n.xShift || 0);
       const d = dia(n.note, n.octave);
       const step = d - clef.bottomDia; // 0 = première ligne, 1 = 1er interligne...
       const y = bottomY - step * SP / 2;
@@ -74,7 +75,7 @@
       }
       if (n.note.acc) {
         const glyph = { '-2': '\u{1D12B}', '-1': '♭', 1: '♯', 2: '\u{1D12A}' }[n.note.acc];
-        ng.appendChild(el('text', { x: x - SP * 1.9, y: y + SP * 0.45, class: 'accidental', 'font-size': SP * 2.1 }, glyph));
+        ng.appendChild(el('text', { x: x - SP * 1.9 - (n.accShift || 0), y: y + SP * 0.45, class: 'accidental', 'font-size': SP * 2.1 }, glyph));
       }
       if (n.label) {
         ng.appendChild(el('text', { x, y: height - 6, class: 'note-label', 'text-anchor': 'middle' }, n.label));

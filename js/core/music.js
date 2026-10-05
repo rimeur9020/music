@@ -252,7 +252,12 @@
     dim7: { suffix: 'dim7', ivs: ['1', 'b3', 'b5', 'bb7'], name: 'diminué septième' },
     '9': { suffix: '9', ivs: ['1', '3', '5', 'b7', '9'], name: 'neuvième' },
     add9: { suffix: 'add9', ivs: ['1', '3', '5', '9'], name: 'add9' },
-    mMaj7: { suffix: 'm(maj7)', ivs: ['1', 'b3', '5', '7'], name: 'mineur septième majeure' }
+    mMaj7: { suffix: 'm(maj7)', ivs: ['1', 'b3', '5', '7'], name: 'mineur septième majeure' },
+    maj9: { suffix: 'maj9', ivs: ['1', '3', '5', '7', '9'], name: 'neuvième majeure' },
+    m9: { suffix: 'm9', ivs: ['1', 'b3', '5', 'b7', '9'], name: 'mineur neuvième' },
+    '7sus4': { suffix: '7sus4', ivs: ['1', '4', '5', 'b7'], name: 'septième suspendu' },
+    '11': { suffix: '11', ivs: ['1', '5', 'b7', '9', '11'], name: 'onzième' },
+    '13': { suffix: '13', ivs: ['1', '3', '5', 'b7', '9', '13'], name: 'treizième' }
   };
 
   /** Chord: { root: note, type: key of CHORD_TYPES, bass?: note } */
