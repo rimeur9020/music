@@ -114,16 +114,16 @@
     });
     return out;
   }
-  function sentencesOf(t) {
-    return t.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z"“(])/).map((s) => s.trim()).filter((s) => s.length > 20 && s.length < 600);
+  function sentencesOf(t, minLen) {
+    return t.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z"“(])/).map((s) => s.trim()).filter((s) => s.length > (minLen || 20) && s.length < 600);
   }
 
   /** Analyse un texte : pour chaque caractéristique, nombre de mentions + meilleure phrase. */
-  function scan(text, sourceName, url, weight, found, onlyGearSections) {
+  function scan(text, sourceName, url, weight, found, onlyGearSections, minLen) {
     sections(text).forEach((sec) => {
       if (SKIP.test(sec.title)) return;
       if (onlyGearSections && sec.title && !GEARSEC.test(sec.title)) return;
-      sentencesOf(sec.text).forEach((s) => {
+      sentencesOf(sec.text, minLen).forEach((s) => {
         FEATURES.forEach((f) => {
           if (!f.re.test(s)) return;
           // éviter les faux positifs évidents
@@ -149,7 +149,7 @@
    * Lance la recherche. Retourne null si rien de musical n'est trouvé.
    * { title, kind: 'work'|'artist', performers: [], guitarists: [], genres: [], genreRef, found: { id: {feature, score, quotes} }, sources: [{name,url}], bpm }
    */
-  async function run(query) {
+  async function wikiRun(query) {
     // 1. Article principal (anglais d'abord, souvent plus détaillé)
     let titles = await searchTitles('en', query, 5);
     if (!titles.length) titles = await searchTitles('en', query + ' song', 5);
@@ -166,7 +166,7 @@
     let ents = main.qid ? await entities([main.qid]) : {};
     const me = ents[main.qid];
     const inst = claimIds(me, 'P31');
-    if (inst.indexOf(Q.genre) >= 0) return null; // c'est un genre musical, pas une chanson
+    if (inst.indexOf(Q.genre) >= 0) return { isGenre: true }; // c'est un genre musical, pas une chanson
     let artistIds = [];
     if (inst.indexOf(Q.human) >= 0 || inst.some((x) => GROUPS.indexOf(x) >= 0) || claimIds(me, 'P527').length) { res.kind = 'artist'; artistIds = [main.qid]; }
     else artistIds = claimIds(me, 'P175').slice(0, 2);
@@ -201,6 +201,120 @@
       } catch (e) { /* on continue */ }
     }
     res.genreRef = genreRef(res.genres, main.text);
+    return res;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Autres sources : sites spécialisés trouvés par un moteur de recherche */
+  /* ------------------------------------------------------------------ */
+  // Un site web ne peut pas lire directement les pages des autres sites (sécurité des navigateurs) :
+  // on passe par des relais publics qui récupèrent la page pour nous.
+  const PROXIES = [
+    (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+    (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+    (u) => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
+  ];
+  const GEAR_SITES = /equipboard|groundguitar|premierguitar|guitarworld|musicradar|guitarplayer|ultimate-guitar|guitar\.com|reverb\.com|sweetwater|andertons|thegearpage|reddit|guitarchalk|guitarinteractive|totalguitar|vintageguitar|guitar-?pedal|pedal|tone|rig/i;
+
+  async function fetchText(url, timeout) {
+    for (const p of PROXIES) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), timeout || 9000);
+      try {
+        const r = await fetch(p(url), { signal: ctl.signal });
+        clearTimeout(timer);
+        if (!r.ok) continue;
+        const t = await r.text();
+        if (t && t.length > 100) return t;
+      } catch (e) { clearTimeout(timer); }
+    }
+    return null;
+  }
+
+  /** Recherche DuckDuckGo (version HTML) : [{ title, url, snippet }] */
+  async function webSearch(q) {
+    const html = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q), 9000);
+    if (!html) return [];
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return [...doc.querySelectorAll('.result')].map((r) => {
+      const a = r.querySelector('a.result__a');
+      if (!a) return null;
+      let href = a.getAttribute('href') || '';
+      try { const u = new URL(href, 'https://duckduckgo.com'); href = u.searchParams.get('uddg') || u.href; } catch (e) { /* tel quel */ }
+      const sn = r.querySelector('.result__snippet');
+      return { title: a.textContent.trim(), url: href, snippet: sn ? sn.textContent.trim() : '' };
+    }).filter((x) => x && /^https?:/.test(x.url) && !/duckduckgo\.com\/y\.js|ad_provider/.test(x.url));
+  }
+
+  function pageText(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script,style,noscript,nav,header,footer,aside,form,iframe,svg').forEach((e) => e.remove());
+    const title = (doc.querySelector('title') || {}).textContent || '';
+    const seen = new Set();
+    const lines = [];
+    doc.querySelectorAll('h1,h2,h3,h4,p,li,td,figcaption,blockquote').forEach((e) => {
+      if (lines.length > 500) return;
+      const t = e.textContent.replace(/\s+/g, ' ').trim();
+      if (t.length < 12 || t.length > 1500 || seen.has(t)) return;
+      seen.add(t);
+      lines.push(t.endsWith('.') ? t : t + '.');
+    });
+    return { title: title.trim(), text: lines.join('\n') };
+  }
+
+  const domainOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
+
+  async function webRun(res, query, onProgress) {
+    const song = res.kind === 'work' ? res.title.replace(/ \(.*\)$/, '') : '';
+    const performer = res.performers[0] || '';
+    const who = res.guitarists[0] || performer;
+    const queries = [];
+    if (song) queries.push(`${song} ${performer} guitar tone gear`);
+    if (who) queries.push(`${who} guitar rig gear amp pedals`);
+    if (!queries.length) queries.push(`${query} guitar tone gear rig`);
+    // mots qui prouvent qu'une page parle bien de ce morceau / cet artiste
+    const STOP = ['guitar', 'song', 'tone', 'sound', 'band', 'the', 'and', 'with', 'live', 'version', 'chanson', 'groupe'];
+    const keys = [song, performer, who, query].filter(Boolean).map((k) => norm(k)).concat(
+      [who, performer].filter(Boolean).map((n) => norm(n).split(/\s+/).pop()),
+      norm(query).split(/[^a-z0-9]+/)).filter((w) => w && w.length > 3 && STOP.indexOf(w) < 0);
+    const relevant = (t) => { const n = norm(t); return keys.some((k) => k && n.indexOf(k) >= 0); };
+
+    const lists = await Promise.all(queries.map((q) => webSearch(q).catch(() => [])));
+    const seen = new Set();
+    const results = [].concat(...lists).filter((r) => { if (seen.has(r.url)) return false; seen.add(r.url); return true; });
+    if (!results.length) return;
+    // extraits de recherche
+    results.filter((r) => relevant(r.title + ' ' + r.snippet)).slice(0, 10).forEach((r) => {
+      scan(r.snippet, domainOf(r.url) + ' (résultat de recherche)', r.url, 1, res.found, false, 12);
+    });
+    // pages complètes des sites spécialisés
+    const pages = results.filter((r) => !/wikipedia\.org/.test(r.url) && relevant(r.title + ' ' + r.url))
+      .sort((a, b) => (GEAR_SITES.test(b.url) ? 1 : 0) - (GEAR_SITES.test(a.url) ? 1 : 0)).slice(0, 4);
+    if (onProgress && pages.length) onProgress('Lecture de ' + pages.map((p) => domainOf(p.url)).join(', ') + '…');
+    await Promise.all(pages.map(async (r) => {
+      const html = await fetchText(r.url, 10000);
+      if (!html) return;
+      const pg = pageText(html);
+      const name = domainOf(r.url) + ' — ' + (pg.title || r.title).slice(0, 80);
+      const before = JSON.stringify(Object.keys(res.found).map((k) => res.found[k].score));
+      scan(pg.text, name, r.url, 2, res.found, false, 12);
+      if (JSON.stringify(Object.keys(res.found).map((k) => res.found[k].score)) !== before) res.sources.push({ name, url: r.url });
+    }));
+    if (!res.genres.length) res.webText = results.map((r) => r.snippet).join(' ');
+  }
+
+  /** Recherche complète : Wikipédia + Wikidata, puis sites spécialisés. */
+  async function run(query, onProgress) {
+    if (onProgress) onProgress('Wikipédia et Wikidata…');
+    let res = null;
+    try { res = await wikiRun(query); } catch (e) { res = null; }
+    if (res && res.isGenre) return null;
+    const fromWiki = !!res;
+    if (!res) res = { title: query, kind: 'work', performers: [], guitarists: [], genres: [], found: {}, sources: [], bpm: null };
+    if (onProgress) onProgress('Recherche sur les sites spécialisés (Equipboard, Ground Guitar, Premier Guitar, Guitar World, MusicRadar, forums…)…');
+    try { await webRun(res, query, onProgress); } catch (e) { /* on garde ce qu'on a */ }
+    if (!fromWiki && !Object.keys(res.found).length) return null;
+    if (!res.genreRef) res.genreRef = genreRef(res.genres, res.webText || '');
     return res;
   }
 
@@ -266,5 +380,5 @@
     return ref;
   }
 
-  window.ToneResearch = { run, buildRef, scan, FEATURES };
+  window.ToneResearch = { run, buildRef, scan, webSearch, pageText, FEATURES };
 })();

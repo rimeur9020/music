@@ -317,8 +317,8 @@
         ...it.quotes.slice(0, 1).map((q) => h('div', { class: 'quote' }, [h('span', { text: '« ' + q.text + ' »' }), h('a', { href: q.url, target: '_blank', rel: 'noopener', text: ' — ' + q.source })]))
       ]))));
     });
-    box.appendChild(h('p', { class: 'hint' }, [document.createTextNode('Sources : ')].concat(...r.sources.map((s, i) => [i ? document.createTextNode(' · ') : null, h('a', { href: s.url, target: '_blank', rel: 'noopener', text: s.name })].filter(Boolean)))));
-    box.appendChild(h('p', { class: 'hint', text: 'Les extraits sont en anglais (les articles anglais sont bien plus détaillés sur le matériel). Le repérage est automatique : vérifie les citations, une mention peut concerner un autre morceau ou une autre époque.' }));
+    if (r.sources.length) box.appendChild(h('p', { class: 'hint' }, [document.createTextNode('Sources : ')].concat(...r.sources.map((s, i) => [i ? document.createTextNode(' · ') : null, h('a', { href: s.url, target: '_blank', rel: 'noopener', text: s.name })].filter(Boolean)))));
+    box.appendChild(h('p', { class: 'hint', text: 'Sources : Wikipédia (en), Wikidata et les sites spécialisés trouvés par la recherche web (Equipboard, Ground Guitar, Premier Guitar, Guitar World, forums…). Les extraits sont en anglais. Le repérage est automatique : vérifie les citations, une mention peut concerner un autre morceau ou une autre époque.' }));
     return box;
   }
 
@@ -393,9 +393,10 @@
         state = { query: q, refId: top.id, others: ids.slice(1, 6) };
         App.save('toneState', state); drawResult(); return;
       }
-      msg.appendChild(h('div', { class: 'feedback info', text: '🔎 Recherche d’infos sur le son de « ' + q + ' » (Wikipédia, Wikidata)…' }));
+      const prog = h('div', { class: 'feedback info', text: '🔎 Recherche d’infos sur le son de « ' + q + ' »…' });
+      msg.appendChild(prog);
       let res = null;
-      try { res = window.ToneResearch ? await ToneResearch.run(q) : null; } catch (e) { res = null; }
+      try { res = window.ToneResearch ? await ToneResearch.run(q, (t) => { prog.textContent = '🔎 ' + t; }) : null; } catch (e) { res = null; }
       msg.innerHTML = '';
       if (res) {
         const exact = top && top.kind !== 'style' && norm(res.title).indexOf(norm(top.title.split(' (')[0])) >= 0;
