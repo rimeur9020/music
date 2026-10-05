@@ -343,3 +343,44 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .rh-examples { display: grid; gap: .6rem; }
 .rh-example { display: grid; grid-template-columns: minmax(180px, 320px) 1fr auto; gap: .8rem; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
 @media (max-width: 560px) { .rh-example { grid-template-columns: 1fr auto; } .rh-example > div { grid-column: 1 / -1; } }
+
+/* ---------- Trouver le son ---------- */
+.tone-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; align-items: start; }
+.tone-layout .field { margin-bottom: .7rem; }
+.tone-layout .field select { width: 100%; }
+.check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .2rem .6rem; }
+.check-grid .checkbox { font-size: .85rem; }
+.tone-list .family { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: .8rem 0 .3rem; font-weight: 700; }
+.tone-list { max-height: 360px; overflow-y: auto; margin-top: .6rem; }
+.tone-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.tone-chip { font: inherit; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: .3rem .55rem; cursor: pointer; display: flex; flex-direction: column; }
+.tone-chip small { color: var(--muted); font-size: .72rem; }
+.tone-chip.on { background: var(--guitar); border-color: var(--guitar); color: #fff; }
+.tone-chip.on small { color: rgba(255,255,255,.85); }
+.tone-chip:hover { border-color: var(--guitar); }
+.panel input[type="text"] { width: 100%; }
+.knob-row { display: flex; flex-wrap: wrap; gap: .8rem; margin: .4rem 0; }
+.knob { display: flex; flex-direction: column; align-items: center; min-width: 64px; }
+.knob-svg { width: 54px; height: 54px; }
+.knob-body { fill: var(--surface-2); stroke: var(--text); stroke-width: 1.5; }
+.knob-pointer { stroke: var(--guitar); stroke-width: 3; stroke-linecap: round; }
+.knob-tick { stroke: var(--muted); stroke-width: 1; }
+.knob b { font-size: .95rem; }
+.knob small { font-size: .7rem; color: var(--muted); }
+.knob span { font-size: .78rem; color: var(--muted); }
+.signal-chain { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin: .5rem 0; }
+.chain-step { border: 1px solid var(--border); border-radius: 8px; padding: .3rem .6rem; background: var(--surface-2); font-size: .88rem; font-weight: 600; }
+.chain-step.ped { border-color: var(--guitar); }
+.chain-step.mod { border-style: dashed; }
+.chain-step.amp { background: var(--guitar); color: #fff; border-color: var(--guitar); }
+.chain-arrow { color: var(--muted); }
+.pedal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: .7rem; }
+.pedal .knob-row { gap: .3rem; flex-wrap: nowrap; }
+.pedal .knob { min-width: 56px; }
+.pedal { border: 2px solid var(--border); border-radius: 12px; padding: .6rem; background: var(--surface-2); }
+.pedal-name { font-weight: 800; }
+.pedal-sub { font-size: .75rem; color: var(--muted); }
+.pedal.od { border-color: #2f9e44; } .pedal.dist { border-color: #f08c00; } .pedal.fuzz { border-color: #c2255c; }
+.pedal.delay { border-color: #1971c2; } .pedal.reverb { border-color: #5f3dc4; } .pedal.chorus, .pedal.vibe, .pedal.phaser, .pedal.flanger { border-color: #0c8599; }
+.tone-result h3 { margin-top: 1.2rem; }
+@media (max-width: 800px) { .tone-layout { grid-template-columns: 1fr; } }
