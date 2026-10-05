@@ -382,6 +382,31 @@
     return box;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Mémoire des recherches : on garde les résultats pour les réafficher */
+  /* tout de suite. Ils ne dépendent pas du matériel (recalculé à l’affichage). */
+  /* ------------------------------------------------------------------ */
+  const CACHE_KEY = 'toneCache';
+  const CACHE_MAX = 80;
+  const cacheKey = (q) => norm(q).replace(/[^a-z0-9]+/g, ' ').trim();
+  function cacheGet(q) {
+    const c = App.store(CACHE_KEY, {});
+    return c[cacheKey(q)] || null;
+  }
+  function cachePut(q, st) {
+    const c = App.store(CACHE_KEY, {});
+    const copy = Object.assign({}, st);
+    delete copy.fromCache;
+    c[cacheKey(q)] = { query: q, date: Date.now(), state: copy };
+    const keys = Object.keys(c).sort((a, b) => c[b].date - c[a].date);
+    keys.slice(CACHE_MAX).forEach((k) => delete c[k]);
+    App.save(CACHE_KEY, c);
+  }
+  function cacheList() {
+    const c = App.store(CACHE_KEY, {});
+    return Object.values(c).sort((a, b) => b.date - a.date);
+  }
+
   function gearSummary(gear) {
     const pedals = gear.pedals.map((id) => (PEDALS.find((p) => p[0] === id) || [id, id])[1].split(' (')[0]);
     return [GUITARS[gear.guitar].name, AMPS[gear.amp].name.split(' (')[0] + (gear.amp !== 'modeling' && gear.amp !== 'none' ? ', ' + gear.channels + (gear.channels > 1 ? ' canaux' : ' canal') : ''),
@@ -401,14 +426,33 @@
     const input = h('input', { type: 'text', placeholder: 'Une chanson, un artiste ou un style (ex. Back in Black, Nirvana, funk…)' });
     const btn = h('button', { class: 'btn primary', text: 'Trouver les réglages' });
     const msg = h('div');
+    const recent = h('div', { class: 'recent' });
     const result = h('div');
     el.appendChild(gearBox);
     el.appendChild(h('div', { class: 'panel' }, [
       h('h2', { style: 'margin-top:0', text: '🎯 Le son que tu veux' }),
       h('div', { class: 'free-search' }, [input, btn]),
       h('p', { class: 'hint', text: 'Réglages de départ : chaque matériel sonne différemment, ajuste à l’oreille (commence par le gain, puis les médiums).' }),
+      recent,
       msg
     ]));
+
+    function drawRecent() {
+      recent.innerHTML = '';
+      const list = cacheList();
+      if (!list.length) return;
+      recent.appendChild(h('div', { class: 'family', text: '⚡ Déjà cherchés (instantané)' }));
+      const chips = h('div', { class: 'chips' });
+      list.slice(0, 15).forEach((e) => {
+        const b = h('button', { class: 'btn small', text: e.query });
+        b.addEventListener('click', () => { input.value = e.query; find(e.query); });
+        chips.appendChild(b);
+      });
+      const clear = h('button', { class: 'btn small', text: '🗑 Vider la mémoire' });
+      clear.addEventListener('click', () => { if (confirm('Effacer toutes les recherches gardées en mémoire ?')) { App.save(CACHE_KEY, {}); drawRecent(); } });
+      chips.appendChild(clear);
+      recent.appendChild(chips);
+    }
     el.appendChild(result);
 
     function drawGearBox() {
@@ -441,11 +485,16 @@
       });
     }
 
-    async function find(q) {
+    async function find(q, force) {
       q = (q || '').trim();
       if (!q) return;
       msg.innerHTML = '';
       result.innerHTML = '';
+      const cached = !force && cacheGet(q);
+      if (cached) {
+        state = Object.assign({}, cached.state, { query: q, fromCache: cached.date });
+        App.save('toneState', state); drawResult(); return;
+      }
       const ids = localMatches(q);
       const top = ids.length ? window.TONE_REFS.find((r) => r.id === ids[0]) : null;
       // un style tapé tel quel (« funk », « metal »…) : pas besoin de recherche
@@ -472,6 +521,7 @@
               : `Les articles sur « ${res.title} » ne parlent pas du matériel : réglages basés sur « ${base.title} »${res.genres.length ? ' (genre : ' + res.genres.slice(0, 3).join(', ') + ')' : ''}.`
           };
         }
+        cachePut(q, state); drawRecent();
         App.save('toneState', state); drawResult(); return;
       }
       if (ids.length) {
@@ -531,6 +581,13 @@
       const r = compute(ref, gear);
       result.innerHTML = '';
       const card = h('div', { class: 'panel tone-result' });
+      if (state.fromCache) {
+        const again = h('button', { class: 'btn small', text: '🔄 Refaire la recherche' });
+        again.addEventListener('click', () => find(state.query, true));
+        card.appendChild(h('div', { class: 'cache-note' }, [
+          h('span', { text: '⚡ Résultat gardé en mémoire (recherche du ' + new Date(state.fromCache).toLocaleDateString('fr-FR') + ').' }), again
+        ]));
+      }
       if (state.banner) card.appendChild(h('div', { class: 'notice', text: state.banner }));
       card.appendChild(h('h2', { text: ref.title + (ref.artist && ref.kind !== 'artist' ? ' — ' + ref.artist : '') }));
       card.appendChild(h('p', { text: ref.desc }));
@@ -594,6 +651,7 @@
     }
 
     drawGearBox();
+    drawRecent();
     if (state) { input.value = state.query || ''; drawResult(); }
     else input.focus();
   }

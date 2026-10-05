@@ -422,3 +422,6 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .part-name { font-weight: 800; font-size: 1.05rem; margin-bottom: .2rem; }
 .part-line { font-size: .95rem; }
 .part .quote { font-size: .82rem; color: var(--muted); font-style: italic; margin-top: .2rem; }
+.recent { margin: .4rem 0; }
+.recent .family { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: .4rem 0 .3rem; font-weight: 700; }
+.cache-note { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; font-size: .88rem; color: var(--muted); background: var(--surface-2); border-radius: 8px; padding: .4rem .7rem; margin-bottom: .6rem; }
