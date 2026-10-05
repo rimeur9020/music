@@ -396,3 +396,8 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .gtr-gear-item { background: var(--surface-2); border-radius: 10px; padding: .6rem .8rem; }
 .gtr-gear-item p { margin: .2rem 0 0; }
 .gtr-gear-title { font-weight: 800; }
+.beat-lights { display: flex; align-items: center; gap: .5rem; margin: .7rem 0; }
+.beat-label { min-width: 5.5rem; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.beat-dot { width: 2.3rem; height: 2.3rem; border-radius: 50%; border: 2px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; color: var(--muted); transition: background .05s; }
+.beat-dot.on { background: var(--theory); border-color: var(--theory); color: #fff; }
+.beat-dot.on.count { background: var(--bad); border-color: var(--bad); }

@@ -125,6 +125,36 @@
   /* ------------------------------------------------------------------ */
   /* Son                                                                 */
   /* ------------------------------------------------------------------ */
+  /* Repère visuel des temps : « 1 2 3 4 » du décompte puis les temps de la mesure. */
+  let lights = null;
+  function makeLights() {
+    const box = h('div', { class: 'beat-lights' });
+    const label = h('span', { class: 'beat-label' });
+    const dots = [0, 1, 2, 3].map((i) => h('span', { class: 'beat-dot', text: String(i + 1) }));
+    box.appendChild(label);
+    dots.forEach((d) => box.appendChild(d));
+    let timers = [];
+    const api = {
+      el: box,
+      clear() { timers.forEach(clearTimeout); timers = []; dots.forEach((d) => d.classList.remove('on', 'count')); label.textContent = ''; },
+      run(t0, beat, countIn, nBeats) {
+        api.clear();
+        const at = (t, fn) => timers.push(setTimeout(fn, Math.max(0, (t - Audio2.now()) * 1000)));
+        for (let b = 0; b < countIn + nBeats; b++) {
+          const isCount = b < countIn;
+          const i = (isCount ? b : b - countIn) % 4;
+          at(t0 + b * beat, () => {
+            label.textContent = isCount ? 'Décompte' : 'Mesure';
+            dots.forEach((d, j) => { d.classList.toggle('on', j === i); d.classList.toggle('count', isCount); });
+          });
+        }
+        at(t0 + (countIn + nBeats) * beat, () => api.clear());
+      }
+    };
+    lights = api;
+    return box;
+  }
+
   function playBar(bar, tempo, opts) {
     opts = opts || {};
     const beat = 60 / tempo;
@@ -133,8 +163,9 @@
     const t0 = Audio2.now() + 0.15;
     for (let b = 0; b < countIn; b++) Audio2.click(t0 + b * beat, b === 0);
     const start = t0 + countIn * beat;
-    const nBeats = bar.reduce((a, c) => a + CELLS[c].beats, 0);
+    const nBeats = Math.max(4, bar.reduce((a, c) => a + CELLS[c].beats, 0));
     if (opts.metronome) for (let b = 0; b < nBeats; b++) Audio2.click(start + b * beat, b === 0);
+    if (lights && !opts.noLights) lights.run(t0, beat, countIn, opts.metronome || opts.showBeats ? nBeats : 0);
     events(bar).forEach((e) => { if (!e.rest) Audio2.piano(76, start + e.start * six, Math.max(0.15, e.dur * six * 0.9), 0.6); });
     return { start, six, end: start + nBeats * beat };
   }
@@ -169,6 +200,7 @@
         App.field('Tempo (noires / min)', tempo)
       ]));
       ex.appendChild(h('p', { class: 'level-desc', text: LEVELS[st.level].desc }));
+      ex.appendChild(h('p', { class: 'hint', text: '🔈 Pas de son ? Monte le volume, et sur iPhone désactive le mode silencieux (le petit bouton sur le côté) : il coupe le son des sites web.' }));
       const area = h('div');
       ex.appendChild(area);
       if (st.mode === 'listen') listenEx(area); else tapEx(area);
@@ -179,16 +211,19 @@
       let score = { ok: 0, total: 0, streak: 0 };
       let target, options, answered;
       const stats = h('div', { class: 'stats' });
+      const metro = h('input', { type: 'checkbox' });
+      metro.checked = true;
       const btns = h('div', { class: 'btn-row' });
       const grid = h('div', { class: 'rhythm-options' });
       const fb = h('div', { class: 'feedback info' });
-      [stats, btns, grid, fb].forEach((x) => area.appendChild(x));
+      [stats, btns, makeLights(), grid, fb].forEach((x) => area.appendChild(x));
       const play = h('button', { class: 'btn primary', text: '▶ Écouter' });
-      play.addEventListener('click', () => playBar(target, st.tempo, { countIn: true }));
+      play.addEventListener('click', () => playBar(target, st.tempo, { countIn: true, metronome: metro.checked }));
       const next = h('button', { class: 'btn', text: 'Suivant →' });
       next.addEventListener('click', newQ);
       btns.appendChild(play);
       btns.appendChild(next);
+      btns.appendChild(h('label', { class: 'checkbox' }, [metro, 'Métronome pendant la mesure']));
 
       function drawStats() {
         stats.innerHTML = '';
@@ -209,7 +244,7 @@
         options.forEach((o, i) => {
           const b = h('button', { class: 'rhythm-option' }, [h('span', { class: 'opt-letter', text: 'ABCD'[i] }), drawBar(o, { beatW: 64, counts: false })]);
           b.addEventListener('click', () => {
-            if (answered) { playBar(o, st.tempo); return; }
+            if (answered) { playBar(o, st.tempo, { metronome: metro.checked }); return; }
             answered = true;
             score.total++;
             const ok = key(o) === key(target);
@@ -224,7 +259,7 @@
         fb.className = 'feedback info';
         fb.textContent = 'Écoute (4 clics de décompte, puis le rythme) et choisis le bon.';
         drawStats();
-        playBar(target, st.tempo, { countIn: true });
+        playBar(target, st.tempo, { countIn: true, metronome: metro.checked });
       }
       drawStats();
       fb.textContent = 'Appuie sur « Suivant » pour commencer.';
@@ -246,6 +281,7 @@
       const metroCb = h('input', { type: 'checkbox' });
       metroCb.checked = true;
       area.appendChild(view);
+      area.appendChild(makeLights());
       area.appendChild(h('div', { class: 'btn-row' }, [go, listen, next, h('label', { class: 'checkbox' }, [metroCb, 'Métronome pendant la mesure'])]));
       area.appendChild(tapBtn);
       area.appendChild(fb);
@@ -268,7 +304,7 @@
 
       go.addEventListener('click', () => {
         taps = [];
-        const info = playBar([], st.tempo, { countIn: true });
+        const info = playBar([], st.tempo, { countIn: true, showBeats: true });
         // on joue seulement le décompte + métronome, l'élève tape
         const beat = 60 / st.tempo;
         const start = info.start;
@@ -312,12 +348,13 @@
     }
 
     drawEx();
+    cleanup.push(() => lights && lights.clear());
 
     /* ---------------- Explications ---------------- */
     const sec = (title, children) => el.appendChild(h('div', { class: 'card', style: 'margin-top:1rem' }, [h('h2', { style: 'margin-top:0', text: title })].concat(children)));
     const example = (cells, label, extra) => {
       const b = h('button', { class: 'btn small', text: '▶' });
-      b.addEventListener('click', () => playBar(cells, 70, { countIn: false, metronome: true }));
+      b.addEventListener('click', () => playBar(cells, 70, { countIn: false, metronome: true, noLights: true }));
       return h('div', { class: 'rh-example' }, [drawBar(cells, { beatW: 70, counts: false }), h('div', {}, [h('b', { text: label }), extra ? h('div', { class: 'hint', text: extra }) : null]), b]);
     };
 

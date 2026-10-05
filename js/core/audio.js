@@ -106,17 +106,41 @@
     src.start(t);
   }
 
+  /** Métronome : « toc » de bloc de bois, bien audible même sur un haut-parleur de téléphone. */
   function click(when, accent) {
     const c = ac();
+    const t = when == null ? c.currentTime + 0.02 : when;
+    const peak = accent ? 1.0 : 0.7;
+    // corps du son : onde carrée filtrée avec une petite chute de hauteur
     const o = c.createOscillator();
-    o.frequency.value = accent ? 1500 : 1000;
+    o.type = 'square';
+    o.frequency.setValueAtTime(accent ? 1900 : 1400, t);
+    o.frequency.exponentialRampToValueAtTime(accent ? 1300 : 950, t + 0.03);
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = accent ? 2000 : 1500;
+    bp.Q.value = 3;
     const g = c.createGain();
-    g.gain.setValueAtTime(0.15, when);
-    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
-    o.connect(g);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    o.connect(bp);
+    bp.connect(g);
     g.connect(master);
-    o.start(when);
-    o.stop(when + 0.06);
+    o.start(t);
+    o.stop(t + 0.1);
+    // attaque : petit bruit très court
+    const len = Math.floor(c.sampleRate * 0.012);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const n = c.createBufferSource();
+    n.buffer = buf;
+    const ng = c.createGain();
+    ng.gain.value = peak * 0.6;
+    n.connect(ng);
+    ng.connect(master);
+    n.start(t);
   }
 
   function play(midi, opts) {
