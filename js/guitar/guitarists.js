@@ -476,7 +476,7 @@
       if (/^eyJ/.test(k)) hd.Authorization = 'Bearer ' + k;
       return hd;
     },
-    url(q) { return window.SITE_CONFIG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/guitarists_shared' + q; },
+    url(q) { return window.SITE_CONFIG.supabaseUrl.replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/guitarists_shared' + q; },
     async list() {
       const r = await fetch(this.url('?select=title&order=created_at.desc&limit=500'), { headers: this.headers() });
       if (!r.ok) throw new Error('HTTP ' + r.status);

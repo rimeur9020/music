@@ -4,6 +4,6 @@
  * Laisse vide pour garder la liste de guitaristes uniquement dans le navigateur.
  */
 window.SITE_CONFIG = {
-  supabaseUrl: '',
+  supabaseUrl: 'https://loxzsinyfetlqeszzhgg.supabase.co',
   supabaseAnonKey: 'sb_publishable_UHFjb5_Se1KlXPWhtrT5uw_-H9Wv7B1'
 };
