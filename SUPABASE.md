@@ -32,10 +32,10 @@ create policy "ajout public" on public.guitarists_shared
 ## 3. Récupérer les deux valeurs
 Menu **Project Settings** → **API** (ou **Data API**) :
 - **Project URL** (ex. `https://abcdefgh.supabase.co`)
-- la clé **anon public** (une longue suite de caractères commençant par `eyJ…`)
+- la clé publique : selon la version de Supabase, c’est la **Publishable key** (commence par `sb_publishable_…`, onglet **API Keys**) ou la clé **anon public** (commence par `eyJ…`, onglet **Legacy API Keys**). Les deux fonctionnent.
 
 La clé « anon » est faite pour être publique : avec les règles ci-dessus, elle permet seulement de lire la liste et d'y ajouter un nom.
-⚠️ Ne donne jamais la clé **service_role**.
+⚠️ Ne donne jamais la clé **secret** (`sb_secret_…`) ni la clé **service_role**.
 
 ## 4. Les mettre dans le site
 Envoie-les à Claude, ou colle-les toi-même dans `js/config.js` :

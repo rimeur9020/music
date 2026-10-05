@@ -471,7 +471,10 @@
     get on() { const c = window.SITE_CONFIG || {}; return !!(c.supabaseUrl && c.supabaseAnonKey); },
     headers() {
       const k = window.SITE_CONFIG.supabaseAnonKey;
-      return { apikey: k, Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' };
+      const hd = { apikey: k, 'Content-Type': 'application/json' };
+      // ancienne clé « anon » (JWT eyJ…) : aussi dans Authorization ; nouvelle clé « publishable » (sb_publishable_…) : apikey seul
+      if (/^eyJ/.test(k)) hd.Authorization = 'Bearer ' + k;
+      return hd;
     },
     url(q) { return window.SITE_CONFIG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/guitarists_shared' + q; },
     async list() {
