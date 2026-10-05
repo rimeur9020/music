@@ -425,3 +425,5 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .recent { margin: .4rem 0; }
 .recent .family { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: .4rem 0 .3rem; font-weight: 700; }
 .cache-note { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; font-size: .88rem; color: var(--muted); background: var(--surface-2); border-radius: 8px; padding: .4rem .7rem; margin-bottom: .6rem; }
+.yt-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+.yt-frame iframe, .yt-frame > div { position: absolute; inset: 0; width: 100%; height: 100%; }

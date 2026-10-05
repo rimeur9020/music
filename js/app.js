@@ -79,6 +79,7 @@
       card('#/guitare/jeu-accords', '🎮', 'Jeu : construis l’accord', 'Un nom d’accord s’affiche : place les doigts sur le manche pour le jouer.'),
       card('#/guitare/guitaristes', '⭐', 'Guitaristes', 'La vie, le matériel et la technique des grands guitaristes.'),
       card('#/guitare/son', '🎛', 'Trouver le son', 'Ton matériel + le son d’une chanson ou d’un artiste = les réglages de guitare, pédales et ampli.'),
+      card('#/guitare/backing', '🎶', 'Backing tracks', 'Cherche une backing track, démarre juste avant le solo, en boucle et à la vitesse voulue.'),
       card('#/guitare/accompagnement', '📄', 'Partition → accompagnement', 'Importe ou scanne une partition : accords, rythmique selon le style, fiche PDF d’une page.')
     ]));
   }
