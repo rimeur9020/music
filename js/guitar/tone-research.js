@@ -114,6 +114,57 @@
     });
     return out;
   }
+  /* ------------------------------------------------------------------ */
+  /* Changements selon les parties du morceau (couplet, refrain, solo…)  */
+  /* ------------------------------------------------------------------ */
+  const SECTION_RE = /\b(intro|verses?|chorus(es)?|pre-chorus|bridge|solos?|outro|breakdown|interlude|middle section|middle eight)\b/i;
+  const PART_GEAR = /clean|distort|overdriv|fuzz|wah|delay|echo|chorus (pedal|effect)|flang|phaser|whammy|octave|tremolo|neck pickup|bridge pickup|acoustic|heav|crunch|gain|slide|volume knob|e-?bow|talk ?box/i;
+  const SECTIONS = [
+    [/\bintro\b/i, 'Intro'], [/\bpre-chorus\b/i, 'Pré-refrain'], [/\bverses?\b/i, 'Couplets'],
+    [/\bchorus(es)?\b(?!\s*(pedal|effect|unit))/i, 'Refrains'], [/\bbridge\b(?!\s*pickup)/i, 'Pont'],
+    [/\bsolos?\b/i, 'Solo'], [/\boutro\b/i, 'Outro'], [/\bbreakdown\b/i, 'Break'], [/\binterlude|middle section|middle eight\b/i, 'Passage du milieu']
+  ];
+  function clauseChanges(c) {
+    const ch = { fx: {} };
+    const t = c.toLowerCase();
+    if (/clean/.test(t) && !/clean (up|boost)/.test(t)) { ch.drive = 'clean'; ch.gain = 1.5; }
+    if (/fuzz/.test(t)) { ch.drive = 'fuzz'; ch.gain = 7.5; }
+    else if (/distort|heav|metal zone|\brat\b|ds-?[12]/.test(t)) { ch.drive = 'distortion'; ch.gain = 7.5; }
+    else if (/overdriv|crunch|tube screamer|ts-?\d/.test(t)) { ch.drive = 'overdrive'; ch.gain = 6; }
+    if (/neck pickup/.test(t)) ch.pickup = 'neck';
+    if (/bridge pickup/.test(t)) ch.pickup = 'bridge';
+    if (/wah/.test(t)) ch.fx.wah = 'pédale wah sur ce passage';
+    if (/whammy|octave/.test(t)) ch.fx.octave = /octave (down|lower|below)/.test(t) ? 'down' : 'up';
+    if (/delay|echo/.test(t)) ch.fx.delay = { ms: 420, mix: 4, repeats: 3 };
+    if (/chorus (pedal|effect)|chorused/.test(t)) ch.fx.chorus = { rate: 3, depth: 5 };
+    if (/flang/.test(t)) ch.fx.flanger = { rate: 3, depth: 5 };
+    if (/phaser|phasing/.test(t)) ch.fx.phaser = { speed: 3, depth: 5 };
+    if (/tremolo/.test(t)) ch.fx.tremolo = { speed: 5, depth: 5 };
+    if (!Object.keys(ch.fx).length) delete ch.fx;
+    const n = Object.keys(ch).length;
+    return n ? ch : null;
+  }
+  /** Transforme les phrases trouvées en changements par partie. */
+  function detectParts(found) {
+    const parts = {};
+    (found.__parts || []).forEach((q) => {
+      let current = null;
+      q.full.split(/,|;|\bwhile\b|\bwhereas\b|\bbut\b|\bthen\b/i).forEach((clause) => {
+        const sec = SECTIONS.find(([re]) => re.test(clause));
+        if (sec) current = sec[1];
+        if (!current) return;
+        const ch = clauseChanges(clause);
+        if (!ch) return;
+        const p = parts[current] || (parts[current] = { name: current, changes: { fx: {} }, quotes: [] });
+        Object.keys(ch).forEach((k) => { if (k === 'fx') Object.assign(p.changes.fx, ch.fx); else if (p.changes[k] == null) p.changes[k] = ch[k]; });
+        if (p.quotes.length < 2 && !p.quotes.some((x) => x.text === q.text)) p.quotes.push({ text: q.text, source: q.source, url: q.url });
+      });
+    });
+    const order = ['Intro', 'Couplets', 'Pré-refrain', 'Refrains', 'Pont', 'Passage du milieu', 'Break', 'Solo', 'Outro'];
+    return Object.values(parts).map((p) => { if (!Object.keys(p.changes.fx).length) delete p.changes.fx; return p; })
+      .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+  }
+
   function sentencesOf(t, minLen) {
     return t.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z"“(])/).map((s) => s.trim()).filter((s) => s.length > (minLen || 20) && s.length < 600);
   }
@@ -124,6 +175,9 @@
       if (SKIP.test(sec.title)) return;
       if (onlyGearSections && sec.title && !GEARSEC.test(sec.title)) return;
       sentencesOf(sec.text, minLen).forEach((s) => {
+        if (found.__parts && SECTION_RE.test(s) && PART_GEAR.test(s) && found.__parts.length < 30 && !found.__parts.some((x) => x.text === s)) {
+          found.__parts.push({ text: s.length > 260 ? s.slice(0, 257) + '…' : s, source: sourceName, url, full: s });
+        }
         FEATURES.forEach((f) => {
           if (!f.re.test(s)) return;
           // éviter les faux positifs évidents
@@ -158,7 +212,8 @@
     const best = titles.find((t) => qn.every((w) => norm(t).indexOf(w) >= 0)) || titles[0];
     const main = await article('en', best);
     if (!main) return null;
-    const res = { title: main.title, kind: 'work', performers: [], guitarists: [], genres: [], found: {}, sources: [], bpm: null };
+    const res = { title: main.title, kind: 'work', performers: [], guitarists: [], genres: [], found: { }, sources: [], bpm: null };
+    Object.defineProperty(res.found, '__parts', { value: [], enumerable: false });
     const src = (a) => ({ name: a.title + ' (Wikipédia ' + a.lang + ')', url: `https://${a.lang}.wikipedia.org/wiki/` + encodeURIComponent(a.title.replace(/ /g, '_')) });
     res.sources.push(src(main));
 
@@ -310,11 +365,15 @@
     try { res = await wikiRun(query); } catch (e) { res = null; }
     if (res && res.isGenre) return null;
     const fromWiki = !!res;
-    if (!res) res = { title: query, kind: 'work', performers: [], guitarists: [], genres: [], found: {}, sources: [], bpm: null };
+    if (!res) {
+      res = { title: query, kind: 'work', performers: [], guitarists: [], genres: [], found: {}, sources: [], bpm: null };
+      Object.defineProperty(res.found, '__parts', { value: [], enumerable: false });
+    }
     if (onProgress) onProgress('Recherche sur les sites spécialisés (Equipboard, Ground Guitar, Premier Guitar, Guitar World, MusicRadar, forums…)…');
     try { await webRun(res, query, onProgress); } catch (e) { /* on garde ce qu'on a */ }
     if (!fromWiki && !Object.keys(res.found).length) return null;
     if (!res.genreRef) res.genreRef = genreRef(res.genres, res.webText || '');
+    res.parts = detectParts(res.found);
     return res;
   }
 
@@ -376,9 +435,10 @@
     if (has('p-dyn')) ref.tips.unshift('Couplets en son clair (coupe la saturation), refrains avec la saturation à fond.');
     if (has('talkbox')) ref.tips.push('L’original utilise une talk box : pas d’équivalent simple, une wah bougée lentement s’en approche un peu.');
     if (has('ebow')) ref.tips.push('L’original utilise un E-Bow (sustain infini) : monte le gain et joue en hammer-on, ou utilise le volume de la guitare.');
+    ref.parts = (res.parts || []).map((p) => Object.assign({ fromResearch: true }, p));
     ref.desc = 'Réglages construits à partir de ce que j’ai trouvé sur ce morceau / cet artiste (voir « Ce que j’ai trouvé » en bas).';
     return ref;
   }
 
-  window.ToneResearch = { run, buildRef, scan, webSearch, pageText, FEATURES };
+  window.ToneResearch = { run, buildRef, scan, webSearch, pageText, detectParts, FEATURES };
 })();

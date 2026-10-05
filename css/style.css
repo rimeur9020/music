@@ -416,3 +416,9 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .research-list li { margin-bottom: .45rem; }
 .research .quote { font-size: .85rem; color: var(--muted); font-style: italic; }
 .research .quote a { font-style: normal; }
+.parts { margin-top: 1.2rem; }
+.part { border-left: 4px solid var(--guitar); background: var(--surface-2); border-radius: 8px; padding: .55rem .8rem; margin-bottom: .6rem; }
+.part.generic { border-left-color: var(--muted); }
+.part-name { font-weight: 800; font-size: 1.05rem; margin-bottom: .2rem; }
+.part-line { font-size: .95rem; }
+.part .quote { font-size: .82rem; color: var(--muted); font-style: italic; margin-top: .2rem; }

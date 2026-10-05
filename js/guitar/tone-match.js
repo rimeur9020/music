@@ -298,6 +298,66 @@
     return scored.sort((x, y) => y.sc - x.sc).map((x) => x.r.id);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Réglages qui changent selon la partie du morceau                    */
+  /* ------------------------------------------------------------------ */
+  function applyPart(ref, part) {
+    const r = JSON.parse(JSON.stringify(ref));
+    const c = part.changes || {};
+    ['drive', 'gain', 'pickup', 'guitarVol', 'guitarTone'].forEach((k) => { if (c[k] != null) r[k] = c[k]; });
+    if (c.gainDelta) r.gain = Math.max(0, Math.min(10, r.gain + c.gainDelta));
+    r.fx = Object.assign({}, r.fx || {});
+    if (c.fx) Object.keys(c.fx).forEach((k) => { if (k === 'remove') c.fx.remove.forEach((x) => delete r.fx[x]); else r.fx[k] = c.fx[k]; });
+    return r;
+  }
+  const fmt = (v) => String(v).replace('.', ',');
+  function knobsTxt(k) { return Object.keys(k).map((n) => n + ' ' + fmt(k[n])).join(', '); }
+  /** Différences entre deux résultats de compute() : lignes lisibles. */
+  function diffLines(a, b) {
+    const out = [];
+    if (a.guitar.pos !== b.guitar.pos) out.push('🎸 sélecteur : ' + POS_LABEL[b.guitar.pos]);
+    if (a.guitar.vol !== b.guitar.vol) out.push('🎸 volume guitare : ' + fmt(b.guitar.vol));
+    if (a.guitar.tone !== b.guitar.tone) out.push('🎸 tonalité guitare : ' + fmt(b.guitar.tone));
+    const pa = {}, pb = {};
+    a.pre.concat(a.post).forEach((p) => { pa[p.id] = p; });
+    b.pre.concat(b.post).forEach((p) => { pb[p.id] = p; });
+    Object.keys(pb).forEach((id) => {
+      if (!pa[id]) out.push('🟢 ' + pb[id].name + ' ON' + (Object.keys(pb[id].knobs).length ? ' (' + knobsTxt(pb[id].knobs) + ')' : '') + (pb[id].extra ? ' — ' + pb[id].extra : ''));
+      else if (JSON.stringify(pa[id].knobs) !== JSON.stringify(pb[id].knobs)) out.push('🎛 ' + pb[id].name + ' : ' + knobsTxt(pb[id].knobs));
+    });
+    Object.keys(pa).forEach((id) => { if (!pb[id]) out.push('🔴 ' + pa[id].name + ' OFF'); });
+    if (a.channel !== b.channel) out.push('🔊 ampli : canal ' + b.channel);
+    const ka = {}; a.ampKnobs.forEach(([l, v]) => { ka[l] = v; });
+    const changed = b.ampKnobs.filter(([l, v]) => v != null && ka[l] !== v).map(([l, v]) => l + ' ' + fmt(v));
+    if (changed.length) out.push('🔊 ampli : ' + changed.join(', '));
+    return out;
+  }
+  /** Conseil général pour le solo quand on n'a pas d'info précise. */
+  function genericSolo(ref) {
+    if (['crunch', 'overdrive', 'distortion', 'highgain', 'fuzz', 'edge'].indexOf(ref.drive) < 0) return null;
+    const fx = ref.fx && ref.fx.delay ? {} : { delay: { ms: 400, mix: 2.5, repeats: 2 } };
+    return { name: 'Solo', generic: true, changes: { guitarVol: 10, gainDelta: 1, fx }, note: 'Conseil général (pas d’info précise trouvée) : un peu plus de gain et de volume pour que le solo ressorte, et un léger delay.' };
+  }
+  function partsBox(ref, gear, main) {
+    const parts = (ref.parts || []).slice();
+    if (!parts.some((p) => /solo/i.test(p.name))) { const g = genericSolo(ref); if (g) parts.push(g); }
+    if (!parts.length) return null;
+    const box = h('div', { class: 'parts' });
+    box.appendChild(h('h3', { text: '🎚 Les réglages qui changent pendant le morceau' }));
+    box.appendChild(h('p', { class: 'hint', text: 'Le réglage principal est celui du dessus. Pour chaque partie, seulement ce qui change :' }));
+    parts.forEach((p) => {
+      const lines = diffLines(main, compute(applyPart(ref, p), gear));
+      const card = h('div', { class: 'part' + (p.generic ? ' generic' : '') });
+      card.appendChild(h('div', { class: 'part-name', text: p.name + ' =' }));
+      if (!lines.length) card.appendChild(h('div', { class: 'part-line', text: 'réglage principal (rien à changer)' }));
+      lines.forEach((l) => card.appendChild(h('div', { class: 'part-line', text: l })));
+      if (p.note) card.appendChild(h('div', { class: 'hint', text: p.note }));
+      (p.quotes || []).slice(0, 1).forEach((q) => card.appendChild(h('div', { class: 'quote' }, [h('span', { text: '« ' + q.text + ' »' }), h('a', { href: q.url, target: '_blank', rel: 'noopener', text: ' — ' + q.source })])));
+      box.appendChild(card);
+    });
+    return box;
+  }
+
   const CAT_LABEL = { guitar: '🎸 Guitare', amp: '🔊 Ampli', fx: '🎛 Effets', tuning: '🎼 Accordage', play: '✋ Jeu' };
   function researchBox(r) {
     const box = h('div', { class: 'research' });
@@ -401,7 +461,7 @@
       if (res) {
         const exact = top && top.kind !== 'style' && norm(res.title).indexOf(norm(top.title.split(' (')[0])) >= 0;
         if (exact) {
-          state = { query: q, refId: top.id, research: summarize(res), others: ids.slice(1, 6) };
+          state = { query: q, refId: top.id, research: summarize(res), extraParts: (res.parts || []).map((x) => Object.assign({ fromResearch: true }, x)), others: ids.slice(1, 6) };
         } else {
           const base = refByPerformer(res) || window.TONE_REFS.find((r) => r.id === res.genreRef) || window.TONE_REFS.find((r) => r.id === 'st-classic-rock');
           const custom = ToneResearch.buildRef(res, base);
@@ -462,8 +522,12 @@
 
     function drawResult() {
       if (!state) return;
-      const ref = state.custom || window.TONE_REFS.find((x) => x.id === state.refId);
+      let ref = state.custom || window.TONE_REFS.find((x) => x.id === state.refId);
       if (!ref) return;
+      if (state.extraParts && state.extraParts.length) {
+        const known = (ref.parts || []).map((x) => x.name);
+        ref = Object.assign({}, ref, { parts: (ref.parts || []).concat(state.extraParts.filter((x) => known.indexOf(x.name) < 0)) });
+      }
       const r = compute(ref, gear);
       result.innerHTML = '';
       const card = h('div', { class: 'panel tone-result' });
@@ -506,6 +570,9 @@
       r.ampKnobs.forEach(([l, v]) => ak.appendChild(knob(l, v)));
       card.appendChild(ak);
       card.appendChild(h('p', { class: 'hint', text: 'Volume : selon la pièce. À faible volume, monte les basses d’un cran ; à fort volume, baisse-les un peu.' }));
+
+      const pb = partsBox(ref, gear, r);
+      if (pb) card.appendChild(pb);
 
       // Conseils
       const tips = (ref.tips || []).concat(r.notes);

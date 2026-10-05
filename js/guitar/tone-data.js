@@ -13,6 +13,10 @@ window.TONE_REFS = [
     tuning: 'Standard', pickup: 'bridge', pickupType: 'single', guitarVol: 10, guitarTone: 8,
     drive: 'fuzz', gain: 7, eq: { bass: 5, mid: 6, treble: 6, presence: 5 },
     fx: { delay: { ms: 440, mix: 4, repeats: 4 }, reverb: 4 },
+    parts: [
+      { name: 'Refrains chantés par Gilmour', changes: { drive: 'clean', gain: 2, pickup: 'neck+middle', fx: { chorus: { rate: 3, depth: 3 } } }, note: 'Accords en son clair, léger chorus, le delay reste.' },
+      { name: 'Solos', changes: {}, note: 'Réglage principal : fuzz + long delay.' }
+    ],
     tips: ['Grands bends lents et vibrato large.', 'Laisse sonner les notes : le delay fait la moitié du son.'] },
   { id: 'back-in-black', kind: 'song', title: 'Back in Black', artist: 'AC/DC – Angus Young',
     desc: 'Crunch rock sec et mordant, sans pédale : un ampli britannique poussé, beaucoup de médiums.',
@@ -23,7 +27,11 @@ window.TONE_REFS = [
     desc: 'Couplets clairs avec chorus, refrains en distorsion épaisse.',
     tuning: 'Standard', pickup: 'bridge', pickupType: 'humbucker', guitarVol: 10, guitarTone: 10,
     drive: 'distortion', gain: 7.5, eq: { bass: 6, mid: 5, treble: 6, presence: 5 },
-    fx: { chorus: { rate: 4, depth: 7, when: 'couplets (son clair)' }, reverb: 2 },
+    fx: { reverb: 2 },
+    parts: [
+      { name: 'Couplets', changes: { drive: 'clean', gain: 1.5, fx: { chorus: { rate: 4, depth: 7 } } }, note: 'Son clair + chorus, juste 2 notes étouffées.' },
+      { name: 'Refrains', changes: {}, note: 'Réglage principal : distorsion à fond, power chords.' }
+    ],
     tips: ['Couplet : son clair + chorus, juste 2 notes étouffées.', 'Refrain : distorsion à fond, power chords.'] },
   { id: 'under-the-bridge', kind: 'song', title: 'Under the Bridge', artist: 'Red Hot Chili Peppers – John Frusciante',
     desc: 'Clair, chaud et brillant, joué en accords enrichis sur le micro manche/milieu.',
@@ -60,6 +68,10 @@ window.TONE_REFS = [
     desc: 'Haute saturation, médiums creusés, palm mute très serré.',
     tuning: 'Standard', pickup: 'bridge', pickupType: 'humbucker', guitarVol: 10, guitarTone: 10,
     drive: 'highgain', gain: 8.5, eq: { bass: 7, mid: 3, treble: 7, presence: 6 }, fx: { reverb: 1 },
+    parts: [
+      { name: 'Passage clair (milieu du morceau)', changes: { drive: 'clean', gain: 1.5, pickup: 'neck', fx: { reverb: 3, chorus: { rate: 2, depth: 3 } } }, note: 'Arpèges en son clair.' },
+      { name: 'Solo', changes: { gain: 9, guitarVol: 10, fx: { delay: { ms: 380, mix: 2, repeats: 2 } } }, note: 'Un peu plus de gain et un léger delay.' }
+    ],
     tips: ['Une overdrive (gain 0, niveau haut) devant l’ampli resserre les graves.', 'Palm mute : tranche de la main sur le chevalet.'] },
   { id: 'paranoid', kind: 'song', title: 'Paranoid / Iron Man', artist: 'Black Sabbath – Tony Iommi',
     desc: 'Saturation épaisse et sombre, très médium.',
@@ -75,6 +87,11 @@ window.TONE_REFS = [
     desc: 'Saturation chaude et chantante, beaucoup de médiums, micro manche pour l’intro.',
     tuning: '½ ton plus bas (Mi♭)', pickup: 'neck', pickupType: 'humbucker', guitarVol: 10, guitarTone: 10,
     drive: 'distortion', gain: 7, eq: { bass: 5, mid: 7, treble: 6, presence: 5 }, fx: { delay: { ms: 380, mix: 2, repeats: 2 }, reverb: 3 },
+    parts: [
+      { name: 'Intro (le riff)', changes: {}, note: 'Réglage principal : micro manche, chaque note bien détachée.' },
+      { name: 'Couplets / rythmique', changes: { pickup: 'bridge' }, note: 'Passe au micro chevalet.' },
+      { name: 'Solo final', changes: { pickup: 'bridge', gain: 7.5, fx: { wah: 'pédale wah en mouvement sur le solo' } }, note: 'Avec la wah.' }
+    ],
     tips: ['Intro : laisse chaque note sonner (pas de palm mute).', 'Passe au micro chevalet pour les rythmiques.'] },
   { id: 'pride-and-joy', kind: 'song', title: 'Pride and Joy', artist: 'Stevie Ray Vaughan',
     desc: 'Clair « gras » très fort, poussé par une Tube Screamer peu saturée.',
@@ -115,6 +132,10 @@ window.TONE_REFS = [
     desc: 'Couplets clairs et doux, puis les fameux « coups » de distorsion très agressive.',
     tuning: 'Standard', pickup: 'bridge', pickupType: 'any', guitarVol: 10, guitarTone: 10,
     drive: 'distortion', gain: 8, eq: { bass: 6, mid: 6, treble: 7, presence: 6 }, fx: { reverb: 3 },
+    parts: [
+      { name: 'Couplets', changes: { drive: 'clean', gain: 1.5, pickup: 'neck' }, note: 'Arpèges en son clair, micro manche.' },
+      { name: 'Refrains (et les « coups » juste avant)', changes: {}, note: 'Réglage principal : distorsion forte, micro chevalet.' }
+    ],
     tips: ['Couplets : micro manche, son clair, arpèges.', 'Les coups de distorsion juste avant le refrain : deux coups de médiator très forts.'] },
   { id: 'basket-case', kind: 'song', title: 'Basket Case', artist: 'Green Day',
     desc: 'Saturation punk compacte, beaucoup de médiums, power chords.',
@@ -135,6 +156,9 @@ window.TONE_REFS = [
     desc: 'Haute saturation sèche et médium, en drop D.',
     tuning: 'Drop D (Ré grave)', pickup: 'bridge', pickupType: 'humbucker', guitarVol: 10, guitarTone: 10,
     drive: 'highgain', gain: 7.5, eq: { bass: 6, mid: 6, treble: 6, presence: 6 }, fx: { wah: 'pour les effets / solos' },
+    parts: [
+      { name: 'Solo', changes: { fx: { octave: 'up' } }, note: 'Whammy réglée une octave au-dessus : c’est elle qui fait le son de sirène.' }
+    ],
     tips: ['Son assez sec, pas de reverb.'] },
   { id: 'still-got-the-blues', kind: 'song', title: 'Still Got the Blues', artist: 'Gary Moore',
     desc: 'Lead soutenu et chantant sur micro manche, saturation moyenne-forte.',
@@ -167,6 +191,10 @@ window.TONE_REFS = [
     desc: 'Strat dans un Marshall poussé, fuzz pour les solos, Uni-Vibe et wah.',
     tuning: '½ ton plus bas (Mi♭)', pickup: 'neck', pickupType: 'single', guitarVol: 10, guitarTone: 9,
     drive: 'crunch', gain: 6, eq: { bass: 5, mid: 6, treble: 6, presence: 6 }, fx: { vibe: { speed: 4, depth: 5 }, wah: 'pour les solos', reverb: 2 },
+    parts: [
+      { name: 'Rythmiques', changes: { guitarVol: 7, gain: 5 }, note: 'Volume de la guitare baissé : le son s’éclaircit.' },
+      { name: 'Solos', changes: { guitarVol: 10, drive: 'fuzz', gain: 8 }, note: 'Volume à fond + fuzz (et wah sur certains solos).' }
+    ],
     tips: ['Utilise le volume de la guitare : 6-7 pour la rythmique, 10 pour les solos.'] },
   { id: 'srv', kind: 'artist', title: 'Stevie Ray Vaughan / blues texan', artist: 'SRV',
     desc: 'Clair très fort et dynamique, poussé par une Tube Screamer.',
@@ -205,7 +233,11 @@ window.TONE_REFS = [
     drive: 'highgain', gain: 7.5, eq: { bass: 6, mid: 6, treble: 7, presence: 6 }, fx: { chorus: { rate: 3, depth: 3, optional: true }, delay: { ms: 400, mix: 3, repeats: 3 }, reverb: 3 }, tips: [] },
   { id: 'st-grunge', kind: 'style', title: 'Grunge', desc: 'Distorsion épaisse et sale, médiums un peu creusés.',
     tuning: 'Standard ou Drop D', pickup: 'bridge', pickupType: 'humbucker', guitarVol: 10, guitarTone: 10,
-    drive: 'distortion', gain: 8, eq: { bass: 6, mid: 4, treble: 6, presence: 5 }, fx: { chorus: { rate: 4, depth: 6, when: 'parties claires' }, reverb: 2 }, tips: [] },
+    drive: 'distortion', gain: 8, eq: { bass: 6, mid: 4, treble: 6, presence: 5 }, fx: { reverb: 2 },
+    parts: [
+      { name: 'Couplets (souvent clairs)', changes: { drive: 'clean', gain: 1.5, fx: { chorus: { rate: 4, depth: 6 } } }, note: 'Son clair + chorus.' },
+      { name: 'Refrains', changes: {}, note: 'Réglage principal : distorsion à fond.' }
+    ], tips: [] },
   { id: 'st-punk', kind: 'style', title: 'Punk rock', desc: 'Saturation compacte et médium, très peu d’effets.',
     tuning: 'Standard', pickup: 'bridge', pickupType: 'humbucker', guitarVol: 10, guitarTone: 10,
     drive: 'distortion', gain: 7, eq: { bass: 6, mid: 7, treble: 6, presence: 5 }, fx: {}, tips: ['Tout en coups vers le bas.'] },
