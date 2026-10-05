@@ -358,7 +358,7 @@
     return box;
   }
 
-  const CAT_LABEL = { guitar: '🎸 Guitare', amp: '🔊 Ampli', fx: '🎛 Effets', tuning: '🎼 Accordage', play: '✋ Jeu' };
+  const CAT_LABEL = { guitar: '🎸 Guitare', amp: '🔊 Ampli', fx: '🎛 Effets', play: '✋ Jeu' };
   function researchBox(r) {
     const box = h('div', { class: 'research' });
     box.appendChild(h('h3', { text: '🔎 Ce que j’ai trouvé' }));
@@ -504,6 +504,11 @@
       }
       const prog = h('div', { class: 'feedback info', text: '🔎 Recherche d’infos sur le son de « ' + q + ' »…' });
       msg.appendChild(prog);
+      // premier résultat immédiat tiré de ma base, remplacé dès que la recherche en ligne est finie
+      if (top && top.kind !== 'style') {
+        state = { query: q, refId: top.id, others: ids.slice(1, 6), banner: '⏳ Premier résultat tiré de ma base : la recherche en ligne continue pour l’affiner…' };
+        drawResult();
+      }
       let res = null;
       try { res = window.ToneResearch ? await ToneResearch.run(q, (t) => { prog.textContent = '🔎 ' + t; }) : null; } catch (e) { res = null; }
       msg.innerHTML = '';
@@ -591,7 +596,6 @@
       if (state.banner) card.appendChild(h('div', { class: 'notice', text: state.banner }));
       card.appendChild(h('h2', { text: ref.title + (ref.artist && ref.kind !== 'artist' ? ' — ' + ref.artist : '') }));
       card.appendChild(h('p', { text: ref.desc }));
-      if (ref.tuning && ref.tuning !== 'Standard') card.appendChild(h('div', { class: 'notice', html: '<b>Accordage :</b> ' + ref.tuning }));
 
       // Guitare
       const gk = h('div', { class: 'knob-row' }, [knob('Volume', r.guitar.vol), knob('Tonalité', r.guitar.tone)]);

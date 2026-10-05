@@ -8,11 +8,18 @@
 
   const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  async function getJSON(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
+  async function getJSON(url, timeout) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeout || 7000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } finally { clearTimeout(timer); }
   }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  /** Attend une promesse au plus ms millisecondes (sinon renvoie fallback). */
+  const within = (p, ms, fallback) => Promise.race([p.catch(() => fallback), sleep(ms).then(() => fallback)]);
   const qs = (o) => Object.entries(Object.assign({ format: 'json', origin: '*' }, o)).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
   const wiki = (lang, params) => getJSON(`https://${lang}.wikipedia.org/w/api.php?${qs(params)}`);
   const wd = (params) => getJSON(`https://www.wikidata.org/w/api.php?${qs(params)}`);
@@ -27,6 +34,14 @@
     if (!p || p.missing !== undefined) return null;
     return { title: p.title, text: p.extract || '', qid: p.pageprops && p.pageprops.wikibase_item, lang };
   }
+  /** Recherche et texte du meilleur article en un seul appel. */
+  async function searchArticle(lang, q) {
+    const d = await wiki(lang, { action: 'query', generator: 'search', gsrsearch: q, gsrlimit: 1, prop: 'extracts|pageprops', explaintext: 1, exsectionformat: 'wiki', ppprop: 'wikibase_item', redirects: 1 });
+    const p = Object.values((d.query && d.query.pages) || {})[0];
+    if (!p || !p.extract) return null;
+    return { title: p.title, text: p.extract, qid: p.pageprops && p.pageprops.wikibase_item, lang };
+  }
+
   async function entities(ids) {
     if (!ids.length) return {};
     const d = await wd({ action: 'wbgetentities', ids: ids.slice(0, 50).join('|'), props: 'claims|sitelinks|labels', languages: 'fr|en', sitefilter: 'enwiki|frwiki' });
@@ -84,11 +99,6 @@
     { id: 'talkbox', cat: 'fx', label: 'Talk box', re: /talk ?box/i },
     { id: 'ebow', cat: 'fx', label: 'E-Bow', re: /e-?bow/i },
     // jeu / accordage
-    { id: 't-dropd', cat: 'tuning', label: 'Drop D', re: /drop[- ]?d\b|drop d tuning/i, tuning: 'Drop D (Ré grave)' },
-    { id: 't-dropc', cat: 'tuning', label: 'Drop C', re: /drop[- ]?c\b/i, tuning: 'Drop C' },
-    { id: 't-half', cat: 'tuning', label: 'Un demi-ton plus bas', re: /half[- ]step (down|lower)|tuned down (a )?half|e♭ tuning|eb tuning|e-flat tuning|down a semitone/i, tuning: '½ ton plus bas (Mi♭)' },
-    { id: 't-dstd', cat: 'tuning', label: 'Un ton plus bas', re: /d standard|whole step (down|lower)|tuned down a (full|whole) step/i, tuning: '1 ton plus bas (Ré standard)' },
-    { id: 't-open', cat: 'tuning', label: 'Accordage ouvert', re: /open (g|d|e|c) tuning|open tuning|dadgad/i, tuning: 'accordage ouvert (voir les sources)' },
     { id: 'p-slide', cat: 'play', label: 'Slide (bottleneck)', re: /\bslide guitar|bottleneck|\bslide\b/i },
     { id: 'p-palm', cat: 'play', label: 'Palm mute', re: /palm[- ]mut/i },
     { id: 'p-finger', cat: 'play', label: 'Jeu aux doigts', re: /fingerpick|fingerstyle|without a pick|with his fingers|with her fingers/i },
@@ -203,17 +213,12 @@
    * Lance la recherche. Retourne null si rien de musical n'est trouvé.
    * { title, kind: 'work'|'artist', performers: [], guitarists: [], genres: [], genreRef, found: { id: {feature, score, quotes} }, sources: [{name,url}], bpm }
    */
-  async function wikiRun(query) {
-    // 1. Article principal (anglais d'abord, souvent plus détaillé)
-    let titles = await searchTitles('en', query, 5);
-    if (!titles.length) titles = await searchTitles('en', query + ' song', 5);
-    if (!titles.length) return null;
-    const qn = norm(query).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 1);
-    const best = titles.find((t) => qn.every((w) => norm(t).indexOf(w) >= 0)) || titles[0];
-    const main = await article('en', best);
+  async function wikiRun(query, ctx) {
+    // 1. Article principal (anglais, souvent plus détaillé) : recherche + texte en une seule requête
+    let main = await searchArticle('en', query);
+    if (!main) main = await searchArticle('en', query + ' song');
     if (!main) return null;
-    const res = { title: main.title, kind: 'work', performers: [], guitarists: [], genres: [], found: { }, sources: [], bpm: null };
-    Object.defineProperty(res.found, '__parts', { value: [], enumerable: false });
+    const res = { title: main.title, kind: 'work', performers: [], guitarists: [], genres: [], found: ctx.found, sources: ctx.sources, bpm: null };
     const src = (a) => ({ name: a.title + ' (Wikipédia ' + a.lang + ')', url: `https://${a.lang}.wikipedia.org/wiki/` + encodeURIComponent(a.title.replace(/ /g, '_')) });
     res.sources.push(src(main));
 
@@ -227,20 +232,24 @@
     else artistIds = claimIds(me, 'P175').slice(0, 2);
     if (res.kind === 'work' && !artistIds.length && !/song|single|album|track|recorded|band|guitar/i.test(main.text.slice(0, 800))) return null;
     let genreIds = claimIds(me, 'P136');
-    const more = await entities(artistIds.filter((x) => x !== main.qid));
-    Object.assign(ents, more);
+    // artistes + genres du morceau en un seul appel
+    Object.assign(ents, await entities([...new Set(artistIds.filter((x) => x !== main.qid).concat(genreIds))].slice(0, 50)));
     const artists = artistIds.map((id) => ents[id]).filter(Boolean);
     res.performers = artists.map(label).filter(Boolean);
-    // guitaristes : la personne elle-même, ou les membres guitaristes du groupe
+    // membres du groupe + genres de l'artiste en un seul appel
     let memberIds = [];
-    artists.forEach((a) => { memberIds = memberIds.concat(claimIds(a, 'P527')); genreIds = genreIds.concat(claimIds(a, 'P136')); });
-    const members = await entities(memberIds.slice(0, 20));
+    let artistGenres = [];
+    artists.forEach((a) => { memberIds = memberIds.concat(claimIds(a, 'P527')); artistGenres = artistGenres.concat(claimIds(a, 'P136')); });
+    const need = [...new Set(memberIds.slice(0, 20).concat(artistGenres.filter((g) => !ents[g])))];
+    Object.assign(ents, await entities(need.slice(0, 50)));
+    genreIds = [...new Set(genreIds.concat(artistGenres))];
     const guitarEnts = [];
     artists.forEach((a) => { if (claimIds(a, 'P106').indexOf(Q.guitarist) >= 0) guitarEnts.push(a); });
-    Object.values(members).forEach((m) => { if (claimIds(m, 'P106').indexOf(Q.guitarist) >= 0) guitarEnts.push(m); });
+    memberIds.forEach((id) => { const m = ents[id]; if (m && claimIds(m, 'P106').indexOf(Q.guitarist) >= 0) guitarEnts.push(m); });
     res.guitarists = guitarEnts.slice(0, 2).map(label).filter(Boolean);
-    const genreEnts = await entities([...new Set(genreIds)].slice(0, 8));
-    res.genres = Object.values(genreEnts).map(label).filter(Boolean);
+    // on prévient tout de suite : la recherche du matériel du guitariste peut démarrer en parallèle
+    if (ctx.onWho) ctx.onWho(res.guitarists[0] || res.performers[0], res);
+    res.genres = genreIds.slice(0, 8).map((id) => label(ents[id])).filter(Boolean);
 
     // 3. Lecture des textes : chanson (poids fort), guitaristes, groupe
     scan(main.text, src(main).name, src(main).url, res.kind === 'work' ? 3 : 2, res.found, false);
@@ -249,12 +258,11 @@
     const extra = [];
     guitarEnts.slice(0, 2).forEach((g) => { const t = enTitle(g); if (t && t !== main.title) extra.push({ t, w: 2 }); });
     artists.forEach((a) => { const t = enTitle(a); if (t && t !== main.title) extra.push({ t, w: 1 }); });
-    for (const x of extra.slice(0, 3)) {
-      try {
-        const a = await article('en', x.t);
-        if (a && a.text) { res.sources.push(src(a)); scan(a.text, src(a).name, src(a).url, x.w, res.found, true); }
-      } catch (e) { /* on continue */ }
-    }
+    // articles des guitaristes et du groupe, en parallèle
+    const arts = await Promise.all(extra.slice(0, 3).map((x) => article('en', x.t).then((a) => ({ a, w: x.w })).catch(() => null)));
+    arts.forEach((x) => {
+      if (x && x.a && x.a.text) { res.sources.push(src(x.a)); scan(x.a.text, src(x.a).name, src(x.a).url, x.w, res.found, true); }
+    });
     res.genreRef = genreRef(res.genres, main.text);
     return res;
   }
@@ -271,19 +279,17 @@
   ];
   const GEAR_SITES = /equipboard|groundguitar|premierguitar|guitarworld|musicradar|guitarplayer|ultimate-guitar|guitar\.com|reverb\.com|sweetwater|andertons|thegearpage|reddit|guitarchalk|guitarinteractive|totalguitar|vintageguitar|guitar-?pedal|pedal|tone|rig/i;
 
-  async function fetchText(url, timeout) {
-    for (const p of PROXIES) {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), timeout || 9000);
-      try {
-        const r = await fetch(p(url), { signal: ctl.signal });
-        clearTimeout(timer);
-        if (!r.ok) continue;
-        const t = await r.text();
-        if (t && t.length > 100) return t;
-      } catch (e) { clearTimeout(timer); }
-    }
-    return null;
+  /** Tous les relais sont essayés en même temps : le premier qui répond gagne. */
+  function fetchText(url, timeout) {
+    const ctls = PROXIES.map(() => new AbortController());
+    const timer = setTimeout(() => ctls.forEach((c) => c.abort()), timeout || 7000);
+    const tries = PROXIES.map((p, i) => fetch(p(url), { signal: ctls[i].signal }).then(async (r) => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const t = await r.text();
+      if (!t || t.length < 100) throw new Error('vide');
+      return t;
+    }));
+    return Promise.any(tries).then((t) => { clearTimeout(timer); ctls.forEach((c) => c.abort()); return t; }).catch(() => { clearTimeout(timer); return null; });
   }
 
   /** Recherche DuckDuckGo (version HTML) : [{ title, url, snippet }] */
@@ -319,58 +325,69 @@
 
   const domainOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
 
-  async function webRun(res, query, onProgress) {
-    const song = res.kind === 'work' ? res.title.replace(/ \(.*\)$/, '') : '';
-    const performer = res.performers[0] || '';
-    const who = res.guitarists[0] || performer;
-    const queries = [];
-    if (song) queries.push(`${song} ${performer} guitar tone gear`);
-    if (who) queries.push(`${who} guitar rig gear amp pedals`);
-    if (!queries.length) queries.push(`${query} guitar tone gear rig`);
-    // mots qui prouvent qu'une page parle bien de ce morceau / cet artiste
-    const STOP = ['guitar', 'song', 'tone', 'sound', 'band', 'the', 'and', 'with', 'live', 'version', 'chanson', 'groupe'];
-    const keys = [song, performer, who, query].filter(Boolean).map((k) => norm(k)).concat(
-      [who, performer].filter(Boolean).map((n) => norm(n).split(/\s+/).pop()),
-      norm(query).split(/[^a-z0-9]+/)).filter((w) => w && w.length > 3 && STOP.indexOf(w) < 0);
-    const relevant = (t) => { const n = norm(t); return keys.some((k) => k && n.indexOf(k) >= 0); };
-
-    const lists = await Promise.all(queries.map((q) => webSearch(q).catch(() => [])));
-    const seen = new Set();
-    const results = [].concat(...lists).filter((r) => { if (seen.has(r.url)) return false; seen.add(r.url); return true; });
-    if (!results.length) return;
-    // extraits de recherche
-    results.filter((r) => relevant(r.title + ' ' + r.snippet)).slice(0, 10).forEach((r) => {
-      scan(r.snippet, domainOf(r.url) + ' (résultat de recherche)', r.url, 1, res.found, false, 12);
+  const STOP = ['guitar', 'song', 'tone', 'sound', 'band', 'the', 'and', 'with', 'live', 'version', 'chanson', 'groupe', 'gear', 'rig'];
+  function relevance(names) {
+    const keys = [];
+    names.filter(Boolean).forEach((n) => {
+      const k = norm(n).replace(/ \(.*\)$/, '');
+      keys.push(k, k.split(/\s+/).pop());
+      k.split(/[^a-z0-9]+/).forEach((w) => keys.push(w));
     });
-    // pages complètes des sites spécialisés
-    const pages = results.filter((r) => !/wikipedia\.org/.test(r.url) && relevant(r.title + ' ' + r.url))
-      .sort((a, b) => (GEAR_SITES.test(b.url) ? 1 : 0) - (GEAR_SITES.test(a.url) ? 1 : 0)).slice(0, 4);
+    const ks = [...new Set(keys)].filter((w) => w && w.length > 3 && STOP.indexOf(w) < 0);
+    return (t) => { const n = norm(t); return ks.some((k) => n.indexOf(k) >= 0); };
+  }
+
+  /** Lit les résultats d'une recherche web : extraits + pages des sites spécialisés (temps limité). */
+  async function readResults(results, relevant, ctx, onProgress, maxPages, deadline) {
+    if (!results || !results.length) return;
+    results.filter((r) => relevant(r.title + ' ' + r.snippet)).slice(0, 10).forEach((r) => {
+      scan(r.snippet, domainOf(r.url) + ' (résultat de recherche)', r.url, 1, ctx.found, false, 12);
+    });
+    const pages = results.filter((r) => !/wikipedia\.org/.test(r.url) && !ctx.read.has(r.url) && relevant(r.title + ' ' + r.url))
+      .sort((a, b) => (GEAR_SITES.test(b.url) ? 1 : 0) - (GEAR_SITES.test(a.url) ? 1 : 0)).slice(0, maxPages);
+    pages.forEach((r) => ctx.read.add(r.url));
     if (onProgress && pages.length) onProgress('Lecture de ' + pages.map((p) => domainOf(p.url)).join(', ') + '…');
-    await Promise.all(pages.map(async (r) => {
-      const html = await fetchText(r.url, 10000);
+    await within(Promise.all(pages.map(async (r) => {
+      const html = await fetchText(r.url, deadline);
       if (!html) return;
       const pg = pageText(html);
       const name = domainOf(r.url) + ' — ' + (pg.title || r.title).slice(0, 80);
-      const before = JSON.stringify(Object.keys(res.found).map((k) => res.found[k].score));
-      scan(pg.text, name, r.url, 2, res.found, false, 12);
-      if (JSON.stringify(Object.keys(res.found).map((k) => res.found[k].score)) !== before) res.sources.push({ name, url: r.url });
-    }));
-    if (!res.genres.length) res.webText = results.map((r) => r.snippet).join(' ');
+      const before = JSON.stringify(Object.values(ctx.found).map((x) => x.score));
+      scan(pg.text, name, r.url, 2, ctx.found, false, 12);
+      if (JSON.stringify(Object.values(ctx.found).map((x) => x.score)) !== before) ctx.sources.push({ name, url: r.url });
+    })), deadline + 500, null);
   }
 
-  /** Recherche complète : Wikipédia + Wikidata, puis sites spécialisés. */
+  /**
+   * Recherche complète, en parallèle :
+   *  - Wikipédia + Wikidata (morceau, interprète, guitaristes, genre)
+   *  - recherche web sur le morceau et lecture des sites spécialisés
+   *  puis, si on a découvert le guitariste, une recherche rapide sur son matériel.
+   */
   async function run(query, onProgress) {
-    if (onProgress) onProgress('Wikipédia et Wikidata…');
-    let res = null;
-    try { res = await wikiRun(query); } catch (e) { res = null; }
-    if (res && res.isGenre) return null;
-    const fromWiki = !!res;
-    if (!res) {
-      res = { title: query, kind: 'work', performers: [], guitarists: [], genres: [], found: {}, sources: [], bpm: null };
-      Object.defineProperty(res.found, '__parts', { value: [], enumerable: false });
-    }
-    if (onProgress) onProgress('Recherche sur les sites spécialisés (Equipboard, Ground Guitar, Premier Guitar, Guitar World, MusicRadar, forums…)…');
-    try { await webRun(res, query, onProgress); } catch (e) { /* on garde ce qu'on a */ }
+    if (onProgress) onProgress('Wikipédia, Wikidata et sites spécialisés en parallèle…');
+    const ctx = { found: {}, sources: [], read: new Set() };
+    Object.defineProperty(ctx.found, '__parts', { value: [], enumerable: false });
+    const webText = [];
+    const stage1 = within(webSearch(`${query} guitar tone gear rig`).then((results) => {
+      webText.push(results.map((r) => r.snippet).join(' '));
+      return readResults(results, relevance([query]), ctx, onProgress, 3, 6000);
+    }), 9000, null);
+    // étape 2 : le matériel du guitariste, lancée dès que Wikidata l'a identifié
+    let stage2 = Promise.resolve();
+    ctx.onWho = (who, r) => {
+      if (!who || norm(query).indexOf(norm(who)) >= 0) return;
+      stage2 = within(webSearch(`${who} guitar rig gear amp pedals`).then((results) => {
+        webText.push(results.map((x) => x.snippet).join(' '));
+        return readResults(results, relevance([who, r.performers[0], r.title]), ctx, onProgress, 2, 5000);
+      }), 7000, null);
+    };
+    const wiki = await within(wikiRun(query, ctx), 9000, null);
+    if (wiki && wiki.isGenre) return null;
+    await Promise.all([stage1, stage2]);
+    const fromWiki = !!wiki;
+    const res = wiki || { title: query, kind: 'work', performers: [], guitarists: [], genres: [], found: ctx.found, sources: ctx.sources, bpm: null };
+    if (!res.genres.length) res.webText = webText.join(' ');
     if (!fromWiki && !Object.keys(res.found).length) return null;
     if (!res.genreRef) res.genreRef = genreRef(res.genres, res.webText || '');
     res.parts = detectParts(res.found);
@@ -424,9 +441,8 @@
       ref.fx.delay = ref.fx.delay || (slap ? { ms: 110, mix: 4, repeats: 1 } : res.bpm ? { ms: Math.round(60000 / res.bpm), mix: 3, repeats: 3 } : { ms: 400, mix: 3, repeats: 3 });
     }
     if (has('reverb')) ref.fx.reverb = Math.max(ref.fx.reverb || 0, 4);
-    // accordage
-    const t = top('tuning');
-    if (t) ref.tuning = t.feature.tuning;
+    // l'accordage n'est pas donné : les sources se trompent trop souvent
+    delete ref.tuning;
     // jeu
     if (has('p-slide')) ref.tips.unshift('Joue au bottleneck (slide), souvent en accordage ouvert.');
     if (has('p-palm')) ref.tips.unshift('Beaucoup de palm mute (tranche de la main sur le chevalet).');
