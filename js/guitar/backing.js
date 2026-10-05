@@ -30,21 +30,105 @@
     return m ? m[1] : null;
   };
 
-  /** Recherche des vidéos YouTube via DuckDuckGo. */
-  async function searchVideos(q) {
-    const html = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q + ' site:youtube.com'));
+  /* ------------------------------------------------------------------ */
+  /* Recherche : plusieurs moteurs essayés l'un après l'autre             */
+  /* ------------------------------------------------------------------ */
+  async function getJSON(url, timeout) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeout || 8000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      clearTimeout(timer);
+      return r.ok ? await r.json() : null;
+    } catch (e) { clearTimeout(timer); return null; }
+  }
+  function dedupe(list) {
+    const seen = new Set();
+    return list.filter((v) => v && v.id && !seen.has(v.id) && seen.add(v.id));
+  }
+
+  // 1. Page de résultats YouTube (via relais)
+  async function viaYouTube(q) {
+    const html = await fetchText('https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&hl=en&gl=US');
     if (!html) return [];
+    const out = [];
+    const re = /"videoRenderer":\{"videoId":"([A-Za-z0-9_-]{11})"[\s\S]*?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = re.exec(html)) && out.length < 20) {
+      let title = m[2];
+      try { title = JSON.parse('"' + m[2] + '"'); } catch (e) { /* tel quel */ }
+      out.push({ id: m[1], title, snippet: '' });
+    }
+    return out;
+  }
+  // 2. Invidious (API ouverte, plusieurs serveurs)
+  async function invidiousInstances() {
+    const c = App.store('invidiousInstances', null);
+    if (c && Date.now() - c.date < 86400000 && c.list.length) return c.list;
+    const d = await getJSON('https://api.invidious.io/instances.json?sort_by=health', 8000);
+    const list = (d || []).filter((x) => x[1] && x[1].api && x[1].type === 'https').map((x) => x[1].uri).slice(0, 6);
+    const fallback = ['https://inv.nadeko.net', 'https://invidious.nerdvpn.de', 'https://yewtu.be', 'https://invidious.privacyredirect.com'];
+    const res = list.length ? list : fallback;
+    App.save('invidiousInstances', { date: Date.now(), list: res });
+    return res;
+  }
+  async function viaInvidious(q) {
+    for (const base of (await invidiousInstances()).slice(0, 4)) {
+      const d = await getJSON(base.replace(/\/$/, '') + '/api/v1/search?type=video&q=' + encodeURIComponent(q), 7000);
+      if (Array.isArray(d) && d.length) return d.filter((x) => x.videoId).map((x) => ({ id: x.videoId, title: x.title || '', snippet: x.description || x.descriptionHtml || '', inv: base }));
+    }
+    return [];
+  }
+  // 3. Piped (autre API ouverte)
+  async function viaPiped(q) {
+    for (const base of ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://api.piped.yt']) {
+      const d = await getJSON(base + '/search?filter=videos&q=' + encodeURIComponent(q), 7000);
+      const items = d && d.items;
+      if (items && items.length) return items.map((x) => ({ id: videoId(x.url || ''), title: x.title || '', snippet: x.shortDescription || '' })).filter((x) => x.id);
+    }
+    return [];
+  }
+  // 4. Moteurs web (via relais) : DuckDuckGo, DuckDuckGo lite, Bing
+  function linksFrom(html, sel, snipSel) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const out = [];
-    doc.querySelectorAll('.result').forEach((r) => {
-      const a = r.querySelector('a.result__a');
-      if (!a) return;
+    doc.querySelectorAll(sel).forEach((a) => {
       let href = a.getAttribute('href') || '';
       try { const u = new URL(href, 'https://duckduckgo.com'); href = u.searchParams.get('uddg') || u.href; } catch (e) { /* tel quel */ }
       const id = videoId(href);
-      if (id && !out.some((x) => x.id === id)) out.push({ id, title: a.textContent.replace(/\s*-\s*YouTube\s*$/i, '').trim(), snippet: ((r.querySelector('.result__snippet') || {}).textContent || '').trim() });
+      if (!id) return;
+      const box = a.closest('.result, li, tr, .b_algo');
+      const sn = box && snipSel ? box.querySelector(snipSel) : null;
+      out.push({ id, title: a.textContent.replace(/\s*[-–|]\s*YouTube\s*$/i, '').trim(), snippet: sn ? sn.textContent.trim() : '' });
     });
     return out;
+  }
+  async function viaDDG(q) {
+    const html = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q + ' site:youtube.com'));
+    return html ? linksFrom(html, 'a.result__a', '.result__snippet') : [];
+  }
+  async function viaDDGLite(q) {
+    const html = await fetchText('https://lite.duckduckgo.com/lite/?q=' + encodeURIComponent(q + ' site:youtube.com'));
+    return html ? linksFrom(html, 'a.result-link, a[href*="youtube.com"]', null) : [];
+  }
+  async function viaBing(q) {
+    const html = await fetchText('https://www.bing.com/search?q=' + encodeURIComponent(q + ' site:youtube.com') + '&setlang=en');
+    return html ? linksFrom(html, 'li.b_algo h2 a, a[href*="youtube.com/watch"]', '.b_caption p') : [];
+  }
+  const ENGINES = [['YouTube', viaYouTube], ['Invidious', viaInvidious], ['Piped', viaPiped], ['DuckDuckGo', viaDDG], ['DuckDuckGo lite', viaDDGLite], ['Bing', viaBing]];
+
+  /** Essaie les moteurs dans l'ordre jusqu'à avoir assez de résultats. report : [{name, n}] */
+  async function searchVideos(q, report, onProgress) {
+    let all = [];
+    for (const [name, fn] of ENGINES) {
+      if (onProgress) onProgress(name);
+      let r = [];
+      try { r = await fn(q); } catch (e) { r = []; }
+      if (report) report.push({ name, n: r.length });
+      all = dedupe(all.concat(r));
+      if (all.length >= 6) break;
+    }
+    return all;
   }
 
   function parseQuery(q) {
@@ -56,11 +140,11 @@
   function rank(v, song, wantsSolo) {
     const t = norm(v.title + ' ' + v.snippet);
     let s = 0;
-    if (/backing/.test(t)) s += 4;
+    if (/backing|jam track|play ?along|playalong|instrumental|karaoke/.test(t)) s += 4;
     if (wantsSolo && /solo/.test(t)) s += 3;
     norm(song).split(/\s+/).filter((w) => w.length > 2).forEach((w) => { if (t.indexOf(w) >= 0) s += 2; });
     if (/guitar|jam/.test(t)) s += 1;
-    if (/lesson|tutorial|how to play|reaction|cover by|live at/.test(t) && !/backing/.test(t)) s -= 4;
+    if (/lesson|tutorial|how to play|reaction|cover by|live at|official (music )?video|lyrics/.test(t) && !/backing|jam track|play ?along|instrumental/.test(t)) s -= 4;
     return s;
   }
 
@@ -69,11 +153,17 @@
 
   /** Lit la description de la vidéo et cherche l'horodatage du solo (« 3:45 Solo »). */
   async function findSolo(id) {
-    const html = await fetchText('https://www.youtube.com/watch?v=' + id, 12000);
-    if (!html) return null;
     let desc = '';
-    const m = /"shortDescription":"((?:[^"\\]|\\.)*)"/.exec(html);
-    if (m) { try { desc = JSON.parse('"' + m[1] + '"'); } catch (e) { desc = m[1]; } }
+    for (const base of (await invidiousInstances()).slice(0, 2)) {
+      const d = await getJSON(base.replace(/\/$/, '') + '/api/v1/videos/' + id + '?fields=description', 7000);
+      if (d && d.description) { desc = d.description; break; }
+    }
+    if (!desc) {
+      const html = await fetchText('https://www.youtube.com/watch?v=' + id + '&hl=en', 12000);
+      if (!html) return null;
+      const m = /"shortDescription":"((?:[^"\\]|\\.)*)"/.exec(html);
+      if (m) { try { desc = JSON.parse('"' + m[1] + '"'); } catch (e) { desc = m[1]; } }
+    }
     const stamps = [];
     desc.split(/\n/).forEach((line) => {
       const t = /(\d{1,2}:\d{2}(?::\d{2})?)/.exec(line);
@@ -142,23 +232,25 @@
       const { wantsSolo, song } = parseQuery(q);
       msg.appendChild(h('div', { class: 'feedback info', text: '🔎 Recherche de backing tracks pour « ' + song + ' »…' }));
       out.innerHTML = '';
+      const report = [];
+      const prog = msg.firstChild;
       let vids = [];
       try {
-        const lists = await Promise.all([
-          searchVideos(song + (wantsSolo ? ' solo' : '') + ' backing track'),
-          wantsSolo ? searchVideos(song + ' backing track') : Promise.resolve([])
-        ]);
-        const seen = new Set();
-        vids = [].concat(...lists).filter((v) => { if (seen.has(v.id)) return false; seen.add(v.id); return true; });
-      } catch (e) { vids = []; }
+        vids = await searchVideos(song + (wantsSolo ? ' solo' : '') + ' backing track', report, (n) => { prog.textContent = '🔎 Recherche de backing tracks pour « ' + song + ' » (' + n + ')…'; });
+        if (wantsSolo && vids.length < 4) vids = dedupe(vids.concat(await searchVideos(song + ' backing track', report)));
+      } catch (e) { /* on garde ce qu'on a */ }
       vids.forEach((v) => { v.score = rank(v, song, wantsSolo); });
-      vids = vids.filter((v) => v.score > 0).sort((a, b) => b.score - a.score).slice(0, 8);
+      vids.sort((a, b) => b.score - a.score);
+      const good = vids.filter((v) => v.score > 0);
+      vids = (good.length ? good : vids).slice(0, 8);
       msg.innerHTML = '';
+      const engines = report.reduce((acc, r) => { acc[r.name] = (acc[r.name] || 0) + r.n; return acc; }, {});
+      const engTxt = Object.keys(engines).map((k) => k + (engines[k] ? ' ✓' : ' ✗')).join(' · ');
       if (!vids.length) {
-        msg.appendChild(h('div', { class: 'notice warn', text: 'Aucune backing track trouvée (ou la recherche n’a pas pu se faire). Vérifie l’orthographe du morceau, ou ta connexion.' }));
+        msg.appendChild(h('div', { class: 'notice warn', text: 'Aucune backing track trouvée. Moteurs essayés : ' + engTxt + '. Vérifie ta connexion, ou réessaie dans une minute (certains moteurs limitent le nombre de recherches).' }));
         return;
       }
-      const result = { wantsSolo, song, videos: vids, chosen: 0, marks: {} };
+      const result = { wantsSolo, song, videos: vids, chosen: 0, marks: {}, engines: engTxt };
       await locate(result, 0);
       c[key] = { query: q, date: Date.now(), result };
       const keys = Object.keys(c).sort((a, b) => c[b].date - c[a].date);
@@ -206,6 +298,7 @@
       }
       card.appendChild(h('h2', { style: 'margin-top:0', text: v.title }));
       if (v.how) card.appendChild(h('div', { class: 'notice', text: v.how }));
+      if (result.engines) card.appendChild(h('p', { class: 'hint', text: 'Trouvé via : ' + result.engines }));
       const frame = h('div', { class: 'yt-frame' }, [h('div', { id: 'yt-player' })]);
       card.appendChild(frame);
 
