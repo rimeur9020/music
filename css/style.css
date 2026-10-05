@@ -301,3 +301,19 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .game-prompt b { font-size: 2.2rem; color: var(--guitar); }
 .game-mute { font-size: 18px; fill: var(--muted); pointer-events: none; }
 .game-board { min-width: 760px; }
+
+/* ---------- Banque de formes ---------- */
+.shape-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: .6rem; }
+.shape-card { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .45rem .3rem .4rem; cursor: pointer; text-align: center; }
+.shape-card:hover { border-color: var(--accent); }
+.shape-name { font-weight: 800; font-size: 1rem; }
+.shape-root { font-size: .72rem; color: var(--muted); }
+.shape-svg { width: 92px; display: block; margin: 0 auto; }
+.sh-line { stroke: var(--text); stroke-width: .7; }
+.sh-dot { fill: var(--text); }
+.sh-root { fill: var(--surface); stroke: var(--root); stroke-width: 2.2; }
+.sh-opt { fill: none; stroke: var(--muted); stroke-width: .8; stroke-dasharray: 1.5 1.2; }
+.sh-barre { fill: none; stroke: var(--text); stroke-width: 1.6; }
+.sh-mute { font-size: 8px; fill: var(--text); }
+.shape-legend { margin-bottom: .5rem; }
+.shape-legend span { display: inline-flex; align-items: center; gap: .3rem; }

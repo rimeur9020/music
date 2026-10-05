@@ -11,6 +11,7 @@ Site statique (HTML/CSS/JS, sans installation) pour travailler la musique.
 ## Guitare
 - **Notes du manche** : mémoriser les notes des cases 0 à 12 (explications, repères, jeu en 3 modes + défi 60 s).
 - **Gammes sur le manche** : toute gamme dans toute tonalité, sur tout le manche ou par position ; fondamentales entourées en orange, option « seulement les fondamentales ».
+- **Formes d’accords** : banque de formes mobiles (fondamentale sur la 6e ou la 5e corde), classées par type d’accord, fondamentale entourée, notes facultatives et barrés indiqués.
 - **Jeu d’accords** : un nom d’accord s’affiche, on pose les doigts sur le manche ; 4 niveaux, indice et solution.
 - **Partition → accompagnement** : photo/scan, fichier MusicXML (.musicxml/.xml/.mxl) ou saisie des notes → tonalité, accords proposés (ou repris de la partition), rythmique selon le style et le tempo, parties A/B détectées, écoute, et **fiche PDF d’une page** (accords de chaque partie une seule fois, structure en bas de page).
 
