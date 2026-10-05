@@ -37,16 +37,43 @@
     v.midis.forEach((m, i) => { if (m != null) Audio2.guitar(m, t + i * 0.025, 2, 0.5); });
   }
 
-  function notesOf(v) {
-    const seen = [];
-    v.midis.forEach((m) => { if (m != null && seen.indexOf(m % 12) < 0) seen.push(m % 12); });
-    return seen.map((pc) => M.noteName(M.spellPc(pc, [3, 8, 10].indexOf(pc) >= 0))).join(' ');
+  function typeLabel(t) {
+    return t === 'maj' ? 'Majeur' : t === 'min' ? 'Mineur (m)' : M.CHORD_TYPES[t].suffix;
+  }
+
+  /** Reconnaît le type d'accord d'une forme (add9, m7…) sans donner les notes. */
+  function detectType(frets) {
+    const midis = frets.map((f, i) => (f === X ? null : Chords.TUNING[i] + f)).filter((m) => m != null);
+    if (midis.length < 2) return null;
+    const pcs = [...new Set(midis.map((m) => m % 12))];
+    const bass = Math.min(...midis) % 12;
+    const roots = [bass].concat(pcs.filter((p) => p !== bass));
+    const types = Object.keys(M.CHORD_TYPES);
+    const set = (root, t) => M.CHORD_TYPES[t].ivs.map((iv) => (root + M.parseInterval(iv).semis) % 12);
+    for (const omitFifth of [false, true]) {
+      for (const r of roots) {
+        for (const t of types) {
+          let need = set(r, t);
+          if (omitFifth && need.length >= 4) need = need.filter((pc) => pc !== (r + 7) % 12);
+          else if (omitFifth) continue;
+          const uniq = [...new Set(need)];
+          if (uniq.length === pcs.length && uniq.every((pc) => pcs.indexOf(pc) >= 0)) return { type: t, inverted: r !== bass };
+        }
+      }
+    }
+    return null;
+  }
+
+  function describe(frets) {
+    const d = detectType(frets);
+    if (!d) return 'Forme non reconnue';
+    return 'Forme d’accord ' + typeLabel(d.type) + (d.inverted ? ' (renversé)' : '');
   }
 
   function card(title, v, extra) {
     const d = h('div', { class: 'diagram dict', title: 'Cliquer pour écouter' });
     d.appendChild(Chords.diagramSVG(title, v));
-    d.appendChild(h('div', { class: 'frets', text: fretsText(v.frets) }));
+    if (!v.movable) d.appendChild(h('div', { class: 'frets', text: fretsText(v.frets) }));
     if (extra) d.appendChild(extra);
     d.addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON') strum(v); });
     return d;
@@ -66,7 +93,7 @@
     const body = h('div');
     el.appendChild(tabs);
     el.appendChild(body);
-    const TABS = [['mine', '⭐ Mes accords'], ['open', '🎸 Accords ouverts'], ['all', '🔎 Tous les accords']];
+    const TABS = [['mine', '⭐ Mes accords'], ['open', '🎸 Accords ouverts'], ['all', '🔁 Formes barrées']];
 
     function draw() {
       tabs.innerHTML = '';
@@ -101,7 +128,7 @@
       });
       frets.addEventListener('input', () => {
         const f = parseFrets(frets.value);
-        msg.textContent = f ? 'Notes : ' + notesOf(makeVoicing(f)) : '';
+        msg.textContent = f ? describe(f) : '';
       });
       body.appendChild(h('div', { class: 'panel' }, [
         h('div', { class: 'toolbar' }, [App.field('Nom', name), App.field('Cases (6e → 1re corde)', frets), App.field('Note', note), add]), msg
@@ -115,6 +142,7 @@
         const f = parseFrets(c.frets);
         if (!f) return;
         const extra = h('div', { class: 'dict-extra' });
+        extra.appendChild(h('small', { class: 'hint', text: describe(f) }));
         if (c.note) extra.appendChild(h('small', { class: 'hint', text: c.note }));
         if (!c.fixed) {
           const del = h('button', { class: 'btn small', text: 'Supprimer' });
@@ -144,20 +172,13 @@
     }
 
     function drawAll() {
-      const types = Object.keys(M.CHORD_TYPES).filter((t) => Chords.E_SHAPES[t] || Chords.A_SHAPES[t]);
-      body.appendChild(h('div', { class: 'toolbar' }, [
-        App.field('Fondamentale', App.select(M.ROOTS.map((r) => ({ value: r, label: M.noteName(M.parseNote(r)) })), sel.root, (v) => { sel.root = v; save(); draw(); })),
-        App.field('Type', App.select(types.map((t) => ({ value: t, label: (M.CHORD_TYPES[t].suffix ? M.CHORD_TYPES[t].suffix + ' — ' : '') + M.CHORD_TYPES[t].name })), types.indexOf(sel.type) >= 0 ? sel.type : 'maj', (v) => { sel.type = v; save(); draw(); }))
-      ]));
-      const ch = { root: M.parseNote(sel.root), type: types.indexOf(sel.type) >= 0 ? sel.type : 'maj' };
-      body.appendChild(h('p', {}, [h('b', { style: 'font-size:1.3rem', text: M.chordName(ch) }), document.createTextNode('  ·  notes : ' + M.chordNotes(ch).map((n) => M.noteName(n)).join(' – ') + '  ·  formule ' + M.CHORD_TYPES[ch.type].ivs.map(M.intervalLabel).join(' '))]));
-      const grid = h('div', { class: 'diagrams' });
-      Chords.allVoicings(ch).forEach((v) => grid.appendChild(card(M.chordName(ch), v, h('small', { class: 'hint', text: v.label }))));
-      body.appendChild(grid);
-      const link = h('a', { href: '#/theorie/accords', text: 'Comment est construit cet accord ? →' });
-      link.addEventListener('click', () => App.save('chordSel', { root: sel.root, type: ch.type, inv: 0 }));
-      body.appendChild(h('p', { style: 'margin-top:1rem' }, [link]));
-      body.appendChild(h('p', { class: 'hint', text: 'Les formes barrées se déplacent sur tout le manche : la fondamentale est sur la 6e corde (forme de Mi) ou sur la 5e corde (forme de La).' }));
+      body.appendChild(h('p', { class: 'lead', text: 'Ces formes se déplacent sur tout le manche. Le point orange R est la fondamentale : place-le sur la note qui donne son nom à l’accord, la forme indique le type d’accord.' }));
+      const shapes = Chords.movableShapes();
+      [['E', 'Fondamentale sur la 6e corde (forme de Mi)'], ['A', 'Fondamentale sur la 5e corde (forme de La)']].forEach(([shape, title]) => {
+        const grid = h('div', { class: 'diagrams' });
+        shapes.filter((x) => x.shape === shape).forEach((x) => grid.appendChild(card(typeLabel(x.type), x.voicing, h('small', { class: 'hint', text: M.CHORD_TYPES[x.type].name }))));
+        body.appendChild(h('div', { class: 'card', style: 'margin-bottom:1rem' }, [h('h3', { text: title }), grid]));
+      });
     }
 
     draw();
@@ -165,9 +186,9 @@
 
   App.register('/guitare/accords', {
     title: 'Dictionnaire d’accords',
-    subtitle: 'Tes accords, les accords ouverts, et n’importe quel accord dans toutes les tonalités. Clique sur un diagramme pour l’écouter.',
+    subtitle: 'Tes accords, les accords ouverts, et les formes barrées classées par type d’accord. Clique sur un diagramme pour l’écouter.',
     render
   });
 
-  window.ChordDict = { parseFrets, makeVoicing, fretsText };
+  window.ChordDict = { parseFrets, makeVoicing, fretsText, detectType };
 })();

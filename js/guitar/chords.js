@@ -100,8 +100,8 @@
     const base = maxF <= 5 ? 1 : minF;
     p.push({ t: 'text', x: 30, y: 9, s: name, size: 9.5, bold: true, anchor: 'middle' });
     for (let s = 0; s < 6; s++) p.push({ t: 'line', x1: sx(s), y1: top, x2: sx(s), y2: top + fretH * nFrets, w: 0.6 });
-    for (let f = 0; f <= nFrets; f++) p.push({ t: 'line', x1: left, y1: top + f * fretH, x2: right, y2: top + f * fretH, w: f === 0 && base === 1 ? 2.4 : 0.6 });
-    if (base > 1) p.push({ t: 'text', x: right + 2, y: top + fretH * 0.7, s: base + 'fr', size: 6.5, anchor: 'start' });
+    for (let f = 0; f <= nFrets; f++) p.push({ t: 'line', x1: left, y1: top + f * fretH, x2: right, y2: top + f * fretH, w: f === 0 && base === 1 && !v.movable ? 2.4 : 0.6 });
+    if (base > 1 && !v.movable) p.push({ t: 'text', x: right + 2, y: top + fretH * 0.7, s: base + 'fr', size: 6.5, anchor: 'start' });
     v.frets.forEach((f, s) => {
       if (f === X) p.push({ t: 'text', x: sx(s), y: top - 3, s: '×', size: 7.5, anchor: 'middle' });
       else if (f === 0) p.push({ t: 'circle', cx: sx(s), cy: top - 5, r: 2.2, fill: false });
@@ -117,6 +117,12 @@
         p.push({ t: 'circle', cx: sx(s), cy: top + (f - base) * fretH + fretH / 2, r: 3.4, fill: true });
       }
     });
+    if (v.movable && v.rootString != null) {
+      const f = v.frets[v.rootString];
+      const cy = top + (f - base) * fretH + fretH / 2;
+      p.push({ t: 'circle', cx: sx(v.rootString), cy, r: 3.8, fill: true, root: true });
+      p.push({ t: 'text', x: sx(v.rootString), y: cy + 2.2, s: 'R', size: 5.5, bold: true, anchor: 'middle', light: true });
+    }
     return p;
   }
 
@@ -137,11 +143,13 @@
         e.setAttribute('font-size', p.size);
         e.setAttribute('text-anchor', p.anchor);
         if (p.bold) e.setAttribute('font-weight', '700');
+        if (p.light) e.setAttribute('style', 'fill:#fff');
         e.textContent = p.s;
       } else if (p.t === 'circle') {
         e = document.createElementNS(ns, 'circle');
         e.setAttribute('cx', p.cx); e.setAttribute('cy', p.cy); e.setAttribute('r', p.r);
         e.setAttribute('class', p.fill ? 'finger' : '');
+        if (p.root) e.setAttribute('style', 'fill:var(--root)');
         if (!p.fill) { e.setAttribute('fill', 'none'); e.setAttribute('stroke', 'currentColor'); e.setAttribute('stroke-width', '0.8'); }
       } else if (p.t === 'rect') {
         e = document.createElementNS(ns, 'rect');
@@ -177,6 +185,26 @@
     return out;
   }
 
+  /** Formes mobiles (barrés) par type, sans tonalité : [{ type, shape: 'E'|'A', voicing }] */
+  function movableShapes() {
+    const out = [];
+    const ORDER = ['maj', 'min', '7', 'maj7', 'm7', 'sus2', 'sus4', '6', 'm6', 'add9', '9', 'm7b5', 'dim', 'dim7', 'aug', 'mMaj7', '5'];
+    ORDER.forEach((type) => {
+      [['E', E_SHAPES, 0], ['A', A_SHAPES, 1]].forEach(([shape, set, rs]) => {
+        const off = set[type];
+        if (!off) return;
+        const min = Math.min(...off.filter((o) => o !== X));
+        const v = fromShape(off, Math.max(1, 1 - min) + 1, rs);
+        if (!v) return;
+        v.movable = true;
+        v.rootString = rs;
+        v.midis = v.frets.map((f, i) => (f === X ? null : TUNING[i] + f));
+        out.push({ type, shape, voicing: v });
+      });
+    });
+    return out;
+  }
+
   /** Liste des accords ouverts : [{ chord, voicing }] */
   function openChords() {
     return Object.keys(OPEN).map((k) => {
@@ -190,5 +218,5 @@
     });
   }
 
-  window.Chords = { voicing, allVoicings, openChords, diagramPrims, diagramSVG, TUNING, X, E_SHAPES, A_SHAPES };
+  window.Chords = { voicing, allVoicings, openChords, movableShapes, diagramPrims, diagramSVG, TUNING, X, E_SHAPES, A_SHAPES };
 })();
