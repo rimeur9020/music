@@ -181,7 +181,7 @@
       h('p', { class: 'hint', text: 'La barre oblique (slash) indique la note de basse : C/E se lit « Do avec Mi à la basse ». Utilisez les boutons de renversement du constructeur pour les entendre.' })
     ]);
     sec('7. Lire un nom d’accord', [
-      table(['Symbole', 'Signifie', 'En français'], [
+      table(['Symbole', 'Signifie', 'Parfois écrit (livres français)'], [
         ['C', 'majeur', 'Do'], ['Cm, C-, Cmin', 'mineur', 'Dom'], ['C7', 'septième (♭7)', 'Do7'],
         ['Cmaj7, CM7, CΔ', 'septième majeure', 'Do7M'], ['Cm7, C-7', 'mineur septième', 'Dom7'],
         ['Cø, Cm7♭5', 'demi-diminué', 'Dom7♭5'], ['C°, Cdim', 'diminué', 'Do dim'], ['C+, Caug', 'augmenté', 'Do aug / Do5♯'],

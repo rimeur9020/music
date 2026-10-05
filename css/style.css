@@ -102,7 +102,6 @@ p { margin: 0 0 .75rem; }
 .sections a:hover { background: var(--surface-2); }
 .section-group[data-section="theorie"] a.active { background: var(--theory); color: #fff; }
 .section-group[data-section="guitare"] a.active { background: var(--guitar); color: #fff; }
-.notation-toggle select { padding: .3rem .4rem; }
 
 main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 16px 4rem; outline: none; }
 

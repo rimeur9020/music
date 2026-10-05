@@ -113,12 +113,6 @@
   }
 
   function start() {
-    const sel = document.getElementById('notation-select');
-    sel.value = Music.settings.notation;
-    sel.addEventListener('change', () => {
-      Music.settings.notation = sel.value;
-      route();
-    });
     window.addEventListener('hashchange', route);
     route();
   }

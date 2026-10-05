@@ -10,14 +10,8 @@
   // Racines proposées dans les menus (avec l'orthographe usuelle).
   const ROOTS = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
-  const settings = {
-    get notation() {
-      try { return localStorage.getItem('notation') || 'fr'; } catch (e) { return 'fr'; }
-    },
-    set notation(v) {
-      try { localStorage.setItem('notation', v); } catch (e) { /* ignore */ }
-    }
-  };
+  // Notes en Do Ré Mi partout ; seuls les noms d'accords utilisent C D E (voir chordName).
+  const settings = { notation: 'fr' };
 
   function mod(n, m) { return ((n % m) + m) % m; }
 
@@ -38,7 +32,7 @@
     return { '-2': '𝄫', '-1': '♭', 0: '', 1: '♯', 2: '𝄪' }[acc];
   }
 
-  /** Nom affichable selon la notation choisie. opts.ascii pour le PDF. */
+  /** Nom de note (Do Ré Mi par défaut). opts.ascii pour le PDF. */
   function noteName(note, opts) {
     opts = opts || {};
     const notation = opts.notation || settings.notation;
@@ -145,7 +139,7 @@
       intervals: ['1', '2', 'b3', '4', '5', 'b6', '7'], mood: 'Orientale, dramatique, classique.',
       desc: 'Mineure naturelle avec une septième majeure : on obtient une vraie sensible et un accord de dominante majeur (V7). L’écart b6 → 7 (un ton et demi) donne la couleur orientale.',
       usage: 'Classique, néo-classique (Malmsteen), musique de l’Est, flamenco, tango.',
-      chords: 'Sur le V7 d’une tonalité mineure (ex. Mi7 → Lam) et sur ImMaj7.',
+      chords: 'Sur le V7 d’une tonalité mineure (ex. E7 → Am) et sur ImMaj7.',
       tip: 'Pour l’entendre : comparez La mineur naturelle et la même avec Sol♯.'
     },
     {
@@ -161,7 +155,7 @@
       intervals: ['1', 'b2', '3', '4', '5', 'b6', 'b7'], mood: 'Espagnol, oriental, arabisant.',
       desc: 'Comme le phrygien mais avec une tierce majeure : c’est la couleur flamenco / klezmer par excellence.',
       usage: 'Flamenco, musique orientale, metal.',
-      chords: 'Sur le V7 d’une tonalité mineure (Mi7 en La mineur).',
+      chords: 'Sur le V7 d’une tonalité mineure (E7 en La mineur).',
       tip: 'Mi phrygien dominant = La mineure harmonique en partant de Mi.'
     },
     {
@@ -262,7 +256,7 @@
 
   /** Chord: { root: note, type: key of CHORD_TYPES, bass?: note } */
   function chordName(ch, opts) {
-    opts = opts || {};
+    opts = Object.assign({}, opts, { notation: 'en' });
     const t = CHORD_TYPES[ch.type] || { suffix: ch.type };
     let s = noteName(ch.root, opts) + (opts.ascii ? t.suffix : t.suffix.replace('b5', '♭5'));
     if (ch.bass) s += '/' + noteName(ch.bass, opts);

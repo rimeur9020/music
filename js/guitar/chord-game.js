@@ -9,7 +9,7 @@
   const NF = 12;
 
   const LEVELS = [
-    { name: 'Accords ouverts', desc: 'Les accords de base près du sillet : Do, Ré, Mi, Sol, La, Lam, Rém, Mim.',
+    { name: 'Accords ouverts', desc: 'Les accords de base près du sillet : C, D, E, G, A, Am, Dm, Em.',
       pool: [['C', 'maj'], ['D', 'maj'], ['E', 'maj'], ['G', 'maj'], ['A', 'maj'], ['A', 'min'], ['D', 'min'], ['E', 'min']] },
     { name: 'Majeurs et mineurs partout', desc: 'Toutes les toniques, majeur ou mineur. Pense aux formes barrées (forme de Mi, forme de La).', types: ['maj', 'min'] },
     { name: 'Septièmes', desc: 'Accords 7, maj7 et m7. La quinte peut être omise.', types: ['7', 'maj7', 'm7'] },

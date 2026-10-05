@@ -105,7 +105,7 @@
           });
           table.appendChild(h('tr', {}, [
             h('td', { text: c.roman }), h('td', { text: M.chordName(c) }),
-            h('td', { text: sevenths[i].type === 'mMaj7' ? M.noteName(sevenths[i].root) + 'm(maj7)' : M.chordName(sevenths[i]) }),
+            h('td', { text: M.chordName(sevenths[i]) }),
             h('td', {}, [play])
           ]));
         });
