@@ -298,32 +298,28 @@
     return scored.sort((x, y) => y.sc - x.sc).map((x) => x.r.id);
   }
 
-  const GENRES = [
-    [/shoegaze/, 'st-shoegaze', 'shoegaze'], [/post-rock|ambient/, 'st-ambient', 'post-rock / ambient'],
-    [/grunge/, 'st-grunge', 'grunge'], [/metal/, 'st-metal', 'metal'], [/punk/, 'st-punk', 'punk'],
-    [/reggae|\bska\b/, 'st-reggae', 'reggae'], [/funk|disco/, 'st-funk', 'funk'], [/jazz|swing/, 'st-jazz', 'jazz'],
-    [/country|bluegrass/, 'st-country', 'country'], [/hard rock/, 'st-classic-rock', 'hard rock'], [/blues/, 'st-blues', 'blues'],
-    [/rock independant|indie|garage|rock alternatif|britpop/, 'st-indie', 'rock indé'],
-    [/rock/, 'st-classic-rock', 'rock'], [/pop|chanson|variete|folk|soul|r&b/, 'st-clean-pop', 'pop / chanson']
-  ];
-
-  /** Pour une chanson ou un artiste absent de la liste : on lit Wikipédia pour trouver l'artiste ou le genre. */
-  async function guessFromWikipedia(query) {
-    if (!window.Wiki) return null;
-    const titles = await Wiki.search('fr', query);
-    if (!titles.length) return null;
-    const page = await Wiki.page('fr', titles[0]);
-    if (!page || !page.text) return null;
-    const text = norm(page.text.slice(0, 2500));
-    // même artiste qu'une référence connue ?
-    const artistRef = window.TONE_REFS.filter((r) => r.kind !== 'style').find((r) => {
-      const names = (r.kind === 'artist' ? [r.title.split(' (')[0], r.artist] : [r.artist.split(' – ')[0], r.artist.split(' – ')[1]]).filter(Boolean).map(norm);
-      return names.some((n) => n.length > 3 && text.indexOf(n) >= 0);
+  const CAT_LABEL = { guitar: '🎸 Guitare', amp: '🔊 Ampli', fx: '🎛 Effets', tuning: '🎼 Accordage', play: '✋ Jeu' };
+  function researchBox(r) {
+    const box = h('div', { class: 'research' });
+    box.appendChild(h('h3', { text: '🔎 Ce que j’ai trouvé' }));
+    const facts = [];
+    if (r.performers.length) facts.push(['Interprète', r.performers.join(', ')]);
+    if (r.guitarists.length) facts.push(['Guitariste(s)', r.guitarists.join(', ')]);
+    if (r.genres.length) facts.push(['Genre', r.genres.slice(0, 4).join(', ')]);
+    if (facts.length) box.appendChild(h('dl', { class: 'facts' }, [].concat(...facts.map(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]))));
+    if (!r.items.length) box.appendChild(h('p', { class: 'muted', text: 'Les sources ne détaillent pas le matériel utilisé.' }));
+    Object.keys(CAT_LABEL).forEach((cat) => {
+      const items = r.items.filter((x) => x.cat === cat);
+      if (!items.length) return;
+      box.appendChild(h('h4', { text: CAT_LABEL[cat] }));
+      box.appendChild(h('ul', { class: 'research-list' }, items.map((it) => h('li', {}, [
+        h('b', { text: it.label }),
+        ...it.quotes.slice(0, 1).map((q) => h('div', { class: 'quote' }, [h('span', { text: '« ' + q.text + ' »' }), h('a', { href: q.url, target: '_blank', rel: 'noopener', text: ' — ' + q.source })]))
+      ]))));
     });
-    if (artistRef) return { refId: artistRef.id, banner: `« ${page.title.replace(/ \(.*\)$/, '')} » n’est pas dans ma liste, mais d’après Wikipédia c’est lié à ${artistRef.kind === 'artist' ? artistRef.title : artistRef.artist} : voici les réglages de « ${artistRef.title} », le son le plus proche.` };
-    const g = GENRES.find(([re]) => re.test(text));
-    if (g) return { refId: g[1], banner: `« ${page.title.replace(/ \(.*\)$/, '')} » n’est pas dans ma liste. D’après Wikipédia, c’est du ${g[2]} : voici les réglages typiques de ce style.` };
-    return null;
+    box.appendChild(h('p', { class: 'hint' }, [document.createTextNode('Sources : ')].concat(...r.sources.map((s, i) => [i ? document.createTextNode(' · ') : null, h('a', { href: s.url, target: '_blank', rel: 'noopener', text: s.name })].filter(Boolean)))));
+    box.appendChild(h('p', { class: 'hint', text: 'Les extraits sont en anglais (les articles anglais sont bien plus détaillés sur le matériel). Le repérage est automatique : vérifie les citations, une mention peut concerner un autre morceau ou une autre époque.' }));
+    return box;
   }
 
   function gearSummary(gear) {
@@ -372,29 +368,56 @@
       gearBox.appendChild(h('div', { style: 'margin-top:.6rem' }, [done]));
     }
 
+    function summarize(res) {
+      const items = Object.values(res.found).sort((x, y) => y.score - x.score).slice(0, 14)
+        .map((x) => ({ cat: x.feature.cat, label: x.feature.label, quotes: x.quotes }));
+      return { title: res.title, kind: res.kind, performers: res.performers, guitarists: res.guitarists, genres: res.genres, items, sources: res.sources };
+    }
+    function refByPerformer(res) {
+      const names = res.performers.concat(res.guitarists).map(norm);
+      return window.TONE_REFS.filter((r) => r.kind !== 'style').find((r) => {
+        const cand = (r.kind === 'artist' ? [r.title.split(' (')[0], r.artist] : (r.artist || '').split(' – ')).filter(Boolean).map(norm);
+        return cand.some((c) => c.length > 3 && names.some((n) => n === c || n.indexOf(c) >= 0 || c.indexOf(n) >= 0));
+      });
+    }
+
     async function find(q) {
       q = (q || '').trim();
       if (!q) return;
       msg.innerHTML = '';
-      const ids = localMatches(q);
-      if (ids.length) {
-        state = { query: q, refId: ids[0], others: ids.slice(1, 6) };
-        App.save('toneState', state);
-        drawResult();
-        return;
-      }
-      msg.appendChild(h('div', { class: 'feedback info', text: 'Pas dans ma liste : je cherche sur Wikipédia…' }));
-      let guess = null;
-      try { guess = await guessFromWikipedia(q); } catch (e) { guess = null; }
-      msg.innerHTML = '';
-      if (guess) {
-        state = Object.assign({ query: q }, guess);
-        App.save('toneState', state);
-        drawResult();
-        return;
-      }
       result.innerHTML = '';
-      msg.appendChild(h('div', { class: 'notice warn', text: 'Je n’ai pas trouvé « ' + q + ' ». Essaie le nom de l’artiste, ou un style : ' + window.TONE_REFS.filter((r) => r.kind === 'style').map((r) => r.title.toLowerCase()).join(', ') + '. Tu peux aussi me demander d’ajouter ce son.' }));
+      const ids = localMatches(q);
+      const top = ids.length ? window.TONE_REFS.find((r) => r.id === ids[0]) : null;
+      // un style tapé tel quel (« funk », « metal »…) : pas besoin de recherche
+      if (top && top.kind === 'style' && norm(top.title).indexOf(norm(q)) >= 0) {
+        state = { query: q, refId: top.id, others: ids.slice(1, 6) };
+        App.save('toneState', state); drawResult(); return;
+      }
+      msg.appendChild(h('div', { class: 'feedback info', text: '🔎 Recherche d’infos sur le son de « ' + q + ' » (Wikipédia, Wikidata)…' }));
+      let res = null;
+      try { res = window.ToneResearch ? await ToneResearch.run(q) : null; } catch (e) { res = null; }
+      msg.innerHTML = '';
+      if (res) {
+        const exact = top && top.kind !== 'style' && norm(res.title).indexOf(norm(top.title.split(' (')[0])) >= 0;
+        if (exact) {
+          state = { query: q, refId: top.id, research: summarize(res), others: ids.slice(1, 6) };
+        } else {
+          const base = refByPerformer(res) || window.TONE_REFS.find((r) => r.id === res.genreRef) || window.TONE_REFS.find((r) => r.id === 'st-classic-rock');
+          const custom = ToneResearch.buildRef(res, base);
+          const n = res.found ? Object.keys(res.found).length : 0;
+          state = {
+            query: q, custom, research: summarize(res), others: ids.slice(0, 5),
+            banner: n ? `Réglages construits à partir de ${n} indice(s) trouvé(s) sur « ${res.title} », en partant du son de « ${base.title} ».`
+              : `Les articles sur « ${res.title} » ne parlent pas du matériel : réglages basés sur « ${base.title} »${res.genres.length ? ' (genre : ' + res.genres.slice(0, 3).join(', ') + ')' : ''}.`
+          };
+        }
+        App.save('toneState', state); drawResult(); return;
+      }
+      if (ids.length) {
+        state = { query: q, refId: ids[0], others: ids.slice(1, 6), banner: 'Recherche en ligne impossible (pas de connexion ?) ou rien trouvé : réglages tirés de ma base.' };
+        App.save('toneState', state); drawResult(); return;
+      }
+      msg.appendChild(h('div', { class: 'notice warn', text: 'Je n’ai rien trouvé sur « ' + q + ' ». Vérifie l’orthographe, ajoute le nom de l’artiste (ex. « Creep Radiohead »), ou tape un style : ' + window.TONE_REFS.filter((r) => r.kind === 'style').map((r) => r.title.toLowerCase()).join(', ') + '.' }));
     }
     btn.addEventListener('click', () => find(input.value));
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') find(input.value); });
@@ -438,7 +461,7 @@
 
     function drawResult() {
       if (!state) return;
-      const ref = window.TONE_REFS.find((x) => x.id === state.refId);
+      const ref = state.custom || window.TONE_REFS.find((x) => x.id === state.refId);
       if (!ref) return;
       const r = compute(ref, gear);
       result.innerHTML = '';
@@ -489,12 +512,13 @@
         card.appendChild(h('h3', { text: '4. Conseils et adaptations à ton matériel' }));
         card.appendChild(h('ul', {}, tips.map((t) => h('li', { text: t }))));
       }
+      if (state.research) card.appendChild(researchBox(state.research));
       if (state.others && state.others.length) {
-        card.appendChild(h('p', { class: 'hint', text: 'Autres résultats :' }));
+        card.appendChild(h('p', { class: 'hint', text: 'Autres sons de ma base :' }));
         card.appendChild(h('div', { class: 'chips' }, state.others.map((id) => {
           const o = window.TONE_REFS.find((x) => x.id === id);
           const bt = h('button', { class: 'btn small', text: o.title + (o.artist && o.kind === 'song' ? ' (' + o.artist.split(' – ')[0] + ')' : '') });
-          bt.addEventListener('click', () => { state = { query: state.query, refId: id, others: state.others.filter((x) => x !== id).concat([state.refId]) }; App.save('toneState', state); drawResult(); });
+          bt.addEventListener('click', () => { state = { query: state.query, refId: id, others: state.others.filter((x) => x !== id).concat(state.refId ? [state.refId] : []) }; App.save('toneState', state); drawResult(); });
           return bt;
         })));
       }
