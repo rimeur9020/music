@@ -68,6 +68,7 @@
       card('#/theorie/oreille', '👂', 'Oreille', 'Reconnaître les notes, les intervalles et les accords au son. 5 niveaux de difficulté.'),
       card('#/theorie/lecture', '🎼', 'Lecture de notes', 'Clé de sol, clé de fa ou les deux, des notes dans la portée jusqu’aux altérations.'),
       card('#/theorie/gammes', '📚', 'Gammes', 'Majeure, mineures, modes, pentatoniques, blues… expliquées et à écouter.'),
+      card('#/theorie/rythme', '🥁', 'Rythme', 'Croches, doubles croches, pointées, syncopes : explications, reconnaissance à l’oreille et exercice de frappe.'),
       card('#/theorie/accords', '🧱', 'Accords', 'Comment on construit un accord : triades, septièmes, extensions, renversements. Constructeur et quiz.')
     ]));
     el.appendChild(h('h2', { class: 'section-heading guitare', text: 'Guitare' }));

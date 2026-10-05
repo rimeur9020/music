@@ -6,6 +6,7 @@ Site statique (HTML/CSS/JS, sans installation) pour travailler la musique.
 - **Oreille** : reconnaître les notes (5 niveaux, avec ou sans Do de référence), les intervalles et les accords.
 - **Lecture de notes** : clé de sol, clé de fa ou les deux, 5 niveaux (dans la portée → lignes supplémentaires → altérations → chrono 60 s).
 - **Gammes** : majeure, modes, mineures, pentatoniques, blues, gammes symétriques… avec formule, couleur, usage, notes sur la portée et accords de la gamme.
+- **Rythme** : croches, doubles croches, notes pointées, contretemps et syncopes ; exercices « reconnais le rythme » et « tape le rythme » (4 niveaux, tempo réglable).
 - **Accords** : construction (empilement de tierces), triades, sus, septièmes, extensions, renversements, lecture des symboles ; constructeur interactif et quiz « trouve les notes ».
 
 ## Guitare
