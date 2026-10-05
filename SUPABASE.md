@@ -12,22 +12,26 @@ Avec, tout guitariste cherché par n'importe qui s'ajoute à une liste commune.
 Menu de gauche → **SQL Editor** → **New query**, colle ceci puis **Run** :
 
 ```sql
-create table public.guitarists_shared (
+create table if not exists public.guitarists_shared (
   id bigint generated always as identity primary key,
-  title text not null unique check (char_length(title) between 2 and 120),
+  title text not null unique,
   created_at timestamptz not null default now()
 );
 
 alter table public.guitarists_shared enable row level security;
 
--- tout le monde peut lire la liste
-create policy "lecture publique" on public.guitarists_shared
+grant select, insert on public.guitarists_shared to anon;
+
+drop policy if exists lecture_publique on public.guitarists_shared;
+create policy lecture_publique on public.guitarists_shared
   for select to anon using (true);
 
--- tout le monde peut ajouter un guitariste (mais pas modifier ni supprimer)
-create policy "ajout public" on public.guitarists_shared
-  for insert to anon with check (true);
+drop policy if exists ajout_public on public.guitarists_shared;
+create policy ajout_public on public.guitarists_shared
+  for insert to anon with check (char_length(title) between 2 and 120);
 ```
+
+Ce script peut être relancé sans risque s'il a déjà été exécuté en partie.
 
 ## 3. Récupérer les deux valeurs
 Menu **Project Settings** → **API** (ou **Data API**) :
