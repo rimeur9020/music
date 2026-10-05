@@ -488,146 +488,146 @@
   };
 
   function render(el) {
-    let current = App.store('guitarist', 'hendrix');
-    /* --- Recherche libre --- */
+    let current = App.store('guitarist', 'hendrix'); // id d'une fiche, ou « wiki:Titre » pour un guitariste ajouté
+    let sharedList = null;
+
+    /* --- Éléments de la page --- */
     const freeInput = h('input', { type: 'text', placeholder: 'Nom d’un guitariste (ex. Jeff Beck, Mark Tremonti, Matthieu Chedid…)' });
     const freeBtn = h('button', { class: 'btn primary', text: 'Faire l’exposé' });
     const freeOut = h('div');
-    const savedBox = h('div');
-    let sharedList = null;
-    const go = async (q) => {
-      q = (q || freeInput.value).trim();
-      if (!q) return;
-      const local = GUITARISTS.find((g) => norm(g.name).indexOf(norm(q)) >= 0 || norm(q).indexOf(norm(g.name)) >= 0);
-      if (local) { freeOut.innerHTML = ''; current = local.id; App.save('guitarist', current); drawList(); drawDetail(); detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-      freeOut.innerHTML = '';
-      freeOut.appendChild(h('div', { class: 'feedback info', text: 'Recherche sur Wikipédia…' }));
-      try {
-        const r = await wikiExpose(q);
-        drawWiki(r);
-      } catch (e) {
-        freeOut.innerHTML = '';
-        freeOut.appendChild(h('div', { class: 'notice warn', text: 'Impossible de joindre Wikipédia : vérifie ta connexion internet.' }));
-      }
-    };
-    freeBtn.addEventListener('click', () => go());
-    freeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    const search = h('input', { type: 'text', placeholder: 'Filtrer : guitariste, groupe, style…' });
+    const list = h('div', { class: 'gtr-list' });
+    const detail = h('div');
     el.appendChild(h('div', { class: 'panel' }, [
-      h('h2', { style: 'margin-top:0', text: '🔎 N’importe quel guitariste' }),
-      h('p', { class: 'hint', text: 'Tape un nom : si le guitariste a une fiche ci-dessous, elle s’affiche ; sinon l’exposé est fait automatiquement à partir de Wikipédia (il faut une connexion internet).' }),
-      h('div', { class: 'free-search' }, [freeInput, freeBtn]), savedBox, freeOut
+      h('h2', { style: 'margin-top:0', text: '🔎 Ajouter un guitariste' }),
+      h('p', { class: 'hint', text: 'Tape un nom : s’il a déjà une fiche, elle s’affiche ; sinon l’exposé est fait automatiquement à partir de Wikipédia (connexion internet nécessaire) et le guitariste est ajouté aux fiches.' }),
+      h('div', { class: 'free-search' }, [freeInput, freeBtn]), freeOut
     ]));
-    drawSaved();
+    el.appendChild(h('div', { class: 'panel' }, [h('h2', { style: 'margin-top:0', text: '⭐ Fiches détaillées' }), search, list]));
+    el.appendChild(detail);
 
+    /* --- Guitaristes ajoutés (liste commune si Supabase est configuré, sinon ce navigateur) --- */
+    function added() {
+      const titles = Shared.on && sharedList ? sharedList : App.store('savedGuitarists', []);
+      return titles.filter((t) => !GUITARISTS.some((g) => norm(g.name) === norm(t)));
+    }
     async function loadShared() {
       if (!Shared.on) return;
       try { sharedList = await Shared.list(); } catch (e) { sharedList = null; }
-      drawSaved();
-    }
-    loadShared();
-
-    function drawSaved() {
-      savedBox.innerHTML = '';
-      if (Shared.on && sharedList) {
-        if (!sharedList.length) { savedBox.appendChild(h('p', { class: 'hint', text: 'Aucun guitariste ajouté pour l’instant : le premier que tu cherches apparaîtra ici pour tout le monde.' })); return; }
-        savedBox.appendChild(h('div', { class: 'family', text: 'Ajoutés par tout le monde (' + sharedList.length + ')' }));
-        const chips = h('div', { class: 'gtr-list' });
-        sharedList.forEach((t) => {
-          const b = h('button', { class: 'tone-chip' }, [h('b', { text: t }), h('small', { text: 'exposé Wikipédia' })]);
-          b.addEventListener('click', () => openTitle(t));
-          chips.appendChild(b);
-        });
-        savedBox.appendChild(chips);
-        return;
-      }
-      const saved = App.store('savedGuitarists', []);
-      if (!saved.length) return;
-      savedBox.appendChild(h('div', { class: 'family', text: 'Déjà ajoutés' }));
-      const chips = h('div', { class: 'gtr-list' });
-      saved.forEach((t) => {
-        const b = h('button', { class: 'tone-chip' }, [h('b', { text: t }), h('small', { text: 'exposé Wikipédia' })]);
-        b.addEventListener('click', () => openTitle(t));
-        const x = h('button', { class: 'chip-x', title: 'Retirer', text: '×' });
-        x.addEventListener('click', () => { App.save('savedGuitarists', App.store('savedGuitarists', []).filter((y) => y !== t)); drawSaved(); });
-        chips.appendChild(h('span', { class: 'saved-chip' }, [b, x]));
-      });
-      savedBox.appendChild(chips);
+      drawList();
     }
     function remember(title) {
       if (Shared.on) {
-        if (sharedList && sharedList.indexOf(title) < 0) { sharedList.unshift(title); drawSaved(); }
+        if (sharedList && sharedList.indexOf(title) < 0) sharedList.unshift(title);
         Shared.add(title).then(loadShared).catch(() => {});
       }
       const saved = App.store('savedGuitarists', []).filter((t) => t !== title);
       saved.unshift(title);
-      App.save('savedGuitarists', saved.slice(0, 60));
-      drawSaved();
+      App.save('savedGuitarists', saved.slice(0, 200));
+      drawList();
     }
-    async function openTitle(t) {
+
+    const select = (id) => { current = id; App.save('guitarist', current); drawList(); };
+    const scrollToDetail = () => detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    async function go() {
+      const q = freeInput.value.trim();
+      if (!q) return;
+      const local = GUITARISTS.find((g) => norm(g.name).indexOf(norm(q)) >= 0 || norm(q).indexOf(norm(g.name)) >= 0);
       freeOut.innerHTML = '';
-      freeOut.appendChild(h('div', { class: 'feedback info', text: 'Chargement…' }));
-      try { drawWiki(await wikiExposeTitle(t)); } catch (e) { freeOut.innerHTML = ''; freeOut.appendChild(h('div', { class: 'notice warn', text: 'Impossible de joindre Wikipédia.' })); }
+      if (local) { select(local.id); drawDetail(); scrollToDetail(); return; }
+      freeOut.appendChild(h('div', { class: 'feedback info', text: 'Recherche sur Wikipédia…' }));
+      try {
+        const r = await wikiExpose(q);
+        freeOut.innerHTML = '';
+        if (r.error) { freeOut.appendChild(h('div', { class: 'notice warn', text: r.error })); return; }
+        showWiki(r);
+      } catch (e) {
+        freeOut.innerHTML = '';
+        freeOut.appendChild(h('div', { class: 'notice warn', text: 'Impossible de joindre Wikipédia : vérifie ta connexion internet.' }));
+      }
+    }
+    freeBtn.addEventListener('click', go);
+    freeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+
+    async function openTitle(t, scroll) {
+      detail.innerHTML = '';
+      detail.appendChild(h('div', { class: 'feedback info', text: 'Chargement de la fiche de ' + t + '…' }));
+      try {
+        const r = await wikiExposeTitle(t);
+        if (r.error) { detail.innerHTML = ''; detail.appendChild(h('div', { class: 'notice warn', text: r.error })); return; }
+        showWiki(r, scroll);
+      } catch (e) {
+        detail.innerHTML = '';
+        detail.appendChild(h('div', { class: 'notice warn', text: 'Impossible de joindre Wikipédia : vérifie ta connexion internet.' }));
+      }
+    }
+
+    function showWiki(r, scroll) {
+      if (r.isGuitarist) remember(r.title);
+      select('wiki:' + r.title);
+      drawWiki(r);
+      if (scroll !== false) scrollToDetail();
     }
 
     function drawWiki(r) {
-      freeOut.innerHTML = '';
-      if (r.error) { freeOut.appendChild(h('div', { class: 'notice warn', text: r.error })); return; }
-      const card = h('article', { class: 'gtr-card wiki-card' });
-      const head = h('div', { class: 'wiki-head' }, [
+      detail.innerHTML = '';
+      const card = h('article', { class: 'panel gtr-card wiki-card' });
+      card.appendChild(h('div', { class: 'wiki-head' }, [
         r.thumb ? h('img', { src: r.thumb, alt: r.title, class: 'wiki-photo' }) : null,
-        h('div', {}, [h('h2', { class: 'gtr-name', text: r.title }), h('div', { class: 'muted', text: 'Exposé généré automatiquement à partir de Wikipédia' })])
-      ]);
-      card.appendChild(head);
-      if (!r.isGuitarist) card.appendChild(h('div', { class: 'notice warn', text: 'Attention : cet article ne semble pas parler d’un guitariste. Essaie un des autres résultats ci-dessous.' }));
+        h('div', {}, [h('h2', { class: 'gtr-name', text: r.title }), h('div', { class: 'muted', text: 'Fiche générée automatiquement à partir de Wikipédia' })])
+      ]));
+      if (!r.isGuitarist) card.appendChild(h('div', { class: 'notice warn', text: 'Attention : cet article ne semble pas parler d’un guitariste (il n’a pas été ajouté aux fiches). Essaie un des autres résultats ci-dessous.' }));
       r.intro.forEach((s) => card.appendChild(h('p', { class: 'lead', style: 'max-width:none', text: s })));
-      const section = (title, list, lang, emptyMsg) => {
+      const section = (title, items, lang, emptyMsg) => {
         card.appendChild(h('h3', { class: 'gtr-section', text: title }));
-        if (!list.length) { card.appendChild(h('p', { class: 'muted', text: emptyMsg })); return; }
+        if (!items.length) { card.appendChild(h('p', { class: 'muted', text: emptyMsg })); return; }
         if (lang === 'en') card.appendChild(h('p', { class: 'hint', text: 'Wikipédia en français n’en parle pas : extrait de la version anglaise.' }));
-        card.appendChild(h('ul', {}, list.map((s) => h('li', { text: s }))));
+        card.appendChild(h('ul', {}, items.map((s) => h('li', { text: s }))));
       };
       section('1. Sa vie et sa carrière', r.life, 'fr', 'Wikipédia ne détaille pas sa biographie.');
       section('2. Son matériel', r.gear, r.gearLang, 'Wikipédia ne détaille pas son matériel (guitares, amplis, pédales) pour ce guitariste.');
       section('3. Sa technique et son style', r.tech, r.techLang, 'Wikipédia ne détaille pas sa technique ou son style.');
       const src = h('p', { class: 'hint' }, [document.createTextNode('Source : '), h('a', { href: r.url, target: '_blank', rel: 'noopener', text: 'Wikipédia (fr)' })]);
       if (r.enUrl) { src.appendChild(document.createTextNode(' · ')); src.appendChild(h('a', { href: r.enUrl, target: '_blank', rel: 'noopener', text: 'Wikipédia (en)' })); }
-      src.appendChild(document.createTextNode(' — textes sous licence CC BY-SA, résumés automatiquement : ils peuvent être incomplets. Pour une fiche rédigée comme les autres, demande-la-moi.'));
+      src.appendChild(document.createTextNode(' — textes sous licence CC BY-SA, résumés automatiquement : ils peuvent être incomplets. Pour une fiche rédigée comme celles d’Hendrix ou Gilmour, demande-la-moi.'));
       card.appendChild(src);
-      if (r.alternatives.length) {
+      if (r.alternatives && r.alternatives.length) {
         card.appendChild(h('p', { class: 'hint', text: 'Ce n’est pas la bonne personne ? Autres résultats :' }));
         const alts = h('div', { class: 'chips' });
         r.alternatives.forEach((t) => {
           const b = h('button', { class: 'btn small', text: t });
-          b.addEventListener('click', async () => {
-            freeOut.innerHTML = '';
-            freeOut.appendChild(h('div', { class: 'feedback info', text: 'Chargement…' }));
-            try { drawWiki(await wikiExposeTitle(t)); } catch (e) { freeOut.innerHTML = ''; freeOut.appendChild(h('div', { class: 'notice warn', text: 'Impossible de joindre Wikipédia.' })); }
-          });
+          b.addEventListener('click', () => openTitle(t));
           alts.appendChild(b);
         });
         card.appendChild(alts);
       }
-      freeOut.appendChild(card);
-      if (r.isGuitarist) remember(r.title);
+      detail.appendChild(card);
     }
 
-    const search = h('input', { type: 'text', placeholder: 'Filtrer les fiches : guitariste, groupe, style…' });
-    const list = h('div', { class: 'gtr-list' });
-    const detail = h('div');
-    el.appendChild(h('div', { class: 'panel' }, [h('h2', { style: 'margin-top:0', text: '⭐ Fiches détaillées' }), search, list,
-      h('p', { class: 'hint', text: 'Ton guitariste n’est pas dans la liste ? Demande-moi de l’ajouter : je rédige sa présentation.' })]));
-    el.appendChild(detail);
     search.addEventListener('input', drawList);
 
     function drawList() {
-      const q = search.value.trim().toLowerCase();
+      const q = norm(search.value);
       list.innerHTML = '';
-      GUITARISTS.filter((g) => !q || (g.name + ' ' + g.bands.join(' ') + ' ' + g.styles).toLowerCase().indexOf(q) >= 0).forEach((g) => {
+      GUITARISTS.filter((g) => !q || norm(g.name + ' ' + g.bands.join(' ') + ' ' + g.styles).indexOf(q) >= 0).forEach((g) => {
         const b = h('button', { class: 'tone-chip' + (g.id === current ? ' on' : '') }, [h('b', { text: g.name }), h('small', { text: g.bands[0] + ' · ' + g.styles })]);
-        b.addEventListener('click', () => { current = g.id; App.save('guitarist', current); drawList(); drawDetail(); detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        b.addEventListener('click', () => { select(g.id); drawDetail(); scrollToDetail(); });
         list.appendChild(b);
       });
-      if (!list.children.length) list.appendChild(h('p', { class: 'muted', text: 'Pas encore dans la liste.' }));
+      added().filter((t) => !q || norm(t).indexOf(q) >= 0).forEach((t) => {
+        const id = 'wiki:' + t;
+        const b = h('button', { class: 'tone-chip' + (id === current ? ' on' : '') }, [h('b', { text: t }), h('small', { text: 'ajouté · Wikipédia' })]);
+        b.addEventListener('click', () => openTitle(t));
+        if (Shared.on && sharedList) { list.appendChild(b); return; }
+        const x = h('button', { class: 'chip-x', title: 'Retirer de la liste', text: '×' });
+        x.addEventListener('click', () => {
+          App.save('savedGuitarists', App.store('savedGuitarists', []).filter((y) => y !== t));
+          if (current === id) { select('hendrix'); drawDetail(); } else drawList();
+        });
+        list.appendChild(h('span', { class: 'saved-chip' }, [b, x]));
+      });
+      if (!list.children.length) list.appendChild(h('p', { class: 'muted', text: 'Aucun résultat. Ajoute-le avec la recherche au-dessus.' }));
     }
 
     function drawDetail() {
@@ -664,7 +664,9 @@
     }
 
     drawList();
-    drawDetail();
+    if (current.indexOf('wiki:') === 0) openTitle(current.slice(5), false);
+    else drawDetail();
+    loadShared();
   }
 
   App.register('/guitare/guitaristes', {
