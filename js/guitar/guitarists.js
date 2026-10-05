@@ -464,6 +464,29 @@
     };
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Liste partagée (Supabase) : les guitaristes ajoutés par tout le monde */
+  /* ------------------------------------------------------------------ */
+  const Shared = {
+    get on() { const c = window.SITE_CONFIG || {}; return !!(c.supabaseUrl && c.supabaseAnonKey); },
+    headers() {
+      const k = window.SITE_CONFIG.supabaseAnonKey;
+      return { apikey: k, Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' };
+    },
+    url(q) { return window.SITE_CONFIG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/guitarists_shared' + q; },
+    async list() {
+      const r = await fetch(this.url('?select=title&order=created_at.desc&limit=500'), { headers: this.headers() });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return (await r.json()).map((x) => x.title);
+    },
+    async add(title) {
+      const r = await fetch(this.url('?on_conflict=title'), {
+        method: 'POST', headers: Object.assign(this.headers(), { Prefer: 'resolution=ignore-duplicates,return=minimal' }), body: JSON.stringify({ title })
+      });
+      if (!r.ok && r.status !== 409) throw new Error('HTTP ' + r.status);
+    }
+  };
+
   function render(el) {
     let current = App.store('guitarist', 'hendrix');
     /* --- Recherche libre --- */
@@ -471,6 +494,7 @@
     const freeBtn = h('button', { class: 'btn primary', text: 'Faire l’exposé' });
     const freeOut = h('div');
     const savedBox = h('div');
+    let sharedList = null;
     const go = async (q) => {
       q = (q || freeInput.value).trim();
       if (!q) return;
@@ -495,9 +519,28 @@
     ]));
     drawSaved();
 
+    async function loadShared() {
+      if (!Shared.on) return;
+      try { sharedList = await Shared.list(); } catch (e) { sharedList = null; }
+      drawSaved();
+    }
+    loadShared();
+
     function drawSaved() {
-      const saved = App.store('savedGuitarists', []);
       savedBox.innerHTML = '';
+      if (Shared.on && sharedList) {
+        if (!sharedList.length) { savedBox.appendChild(h('p', { class: 'hint', text: 'Aucun guitariste ajouté pour l’instant : le premier que tu cherches apparaîtra ici pour tout le monde.' })); return; }
+        savedBox.appendChild(h('div', { class: 'family', text: 'Ajoutés par tout le monde (' + sharedList.length + ')' }));
+        const chips = h('div', { class: 'gtr-list' });
+        sharedList.forEach((t) => {
+          const b = h('button', { class: 'tone-chip' }, [h('b', { text: t }), h('small', { text: 'exposé Wikipédia' })]);
+          b.addEventListener('click', () => openTitle(t));
+          chips.appendChild(b);
+        });
+        savedBox.appendChild(chips);
+        return;
+      }
+      const saved = App.store('savedGuitarists', []);
       if (!saved.length) return;
       savedBox.appendChild(h('div', { class: 'family', text: 'Déjà ajoutés' }));
       const chips = h('div', { class: 'gtr-list' });
@@ -511,6 +554,10 @@
       savedBox.appendChild(chips);
     }
     function remember(title) {
+      if (Shared.on) {
+        if (sharedList && sharedList.indexOf(title) < 0) { sharedList.unshift(title); drawSaved(); }
+        Shared.add(title).then(loadShared).catch(() => {});
+      }
       const saved = App.store('savedGuitarists', []).filter((t) => t !== title);
       saved.unshift(title);
       App.save('savedGuitarists', saved.slice(0, 60));
