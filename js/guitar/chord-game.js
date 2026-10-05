@@ -112,7 +112,7 @@
       }
       for (let s = 0; s < 6; s++) {
         mk('line', { x1: lineX(0), x2: lineX(NF), y1: Y(s), y2: Y(s), class: 'fb-string', 'stroke-width': 0.8 + (5 - s) * 0.35 });
-        mk('text', { x: 6, y: Y(s) + 4, class: 'fb-fretnum', 'text-anchor': 'start' }, STRING_NAMES[s]);
+        mk('text', { x: 12, y: Y(s) + 4, class: 'fb-fretnum', 'text-anchor': 'start' }, STRING_NAMES[s]);
         // zones cliquables
         for (let f = 0; f <= NF; f++) {
           const x = f === 0 ? left - 44 : lineX(f - 1);

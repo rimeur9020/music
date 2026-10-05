@@ -9,6 +9,7 @@ Site statique (HTML/CSS/JS, sans installation) pour travailler la musique.
 - **Accords** : construction (empilement de tierces), triades, sus, septièmes, extensions, renversements, lecture des symboles ; constructeur interactif et quiz « trouve les notes ».
 
 ## Guitare
+- **Notes du manche** : mémoriser les notes des cases 0 à 12 (explications, repères, jeu en 3 modes + défi 60 s).
 - **Gammes sur le manche** : toute gamme dans toute tonalité, sur tout le manche ou par position ; fondamentales entourées en orange, option « seulement les fondamentales ».
 - **Dictionnaire d’accords** : « Mes accords » (liste dans `js/guitar/my-chords.js` + ajout depuis le site), accords ouverts (catégorie à part), et tous les accords dans toutes les tonalités (formes de Mi et de La).
 - **Jeu d’accords** : un nom d’accord s’affiche, on pose les doigts sur le manche ; 4 niveaux, indice et solution.
