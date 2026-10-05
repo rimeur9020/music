@@ -5,5 +5,5 @@
  */
 window.SITE_CONFIG = {
   supabaseUrl: '',
-  supabaseAnonKey: ''
+  supabaseAnonKey: 'sb_publishable_UHFjb5_Se1KlXPWhtrT5uw_-H9Wv7B1'
 };
