@@ -409,3 +409,4 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .saved-chip .tone-chip { border-radius: 8px 0 0 8px; }
 .chip-x { font: inherit; border: 1px solid var(--border); border-left: 0; border-radius: 0 8px 8px 0; background: var(--surface); color: var(--muted); cursor: pointer; padding: 0 .5rem; }
 .chip-x:hover { color: var(--bad); }
+.gear-summary { display: flex; justify-content: space-between; align-items: center; gap: .8rem; flex-wrap: wrap; }

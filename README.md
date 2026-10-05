@@ -14,8 +14,8 @@ Site statique (HTML/CSS/JS, sans installation) pour travailler la musique.
 - **Gammes sur le manche** : toute gamme dans toute tonalité, sur tout le manche ou par position ; fondamentales entourées en orange, option « seulement les fondamentales ».
 - **Formes d’accords** : banque de formes mobiles (fondamentale sur la 6e ou la 5e corde), classées par type d’accord, fondamentale entourée, notes facultatives et barrés indiqués.
 - **Jeu d’accords** : un nom d’accord s’affiche, on pose les doigts sur le manche ; 4 niveaux, indice et solution.
-- **Guitaristes** : fiches rédigées (vie et groupes, matériel, technique, morceaux à écouter) dans `js/guitar/guitarists.js`, et exposé automatique pour n’importe quel guitariste à partir de Wikipédia (connexion internet requise). Les guitaristes cherchés s’ajoutent à une liste ; pour la partager entre tous les visiteurs, voir `SUPABASE.md`.
-- **Trouver le son** : on entre son matériel (guitare, ampli, pédales) et une chanson / un artiste / un style ; le site donne sélecteur de micro, chaîne de pédales avec réglages, réglages d’ampli et adaptations quand il manque du matériel (références dans `js/guitar/tone-data.js`).
+- **Guitaristes** : on tape le nom d’un guitariste et on obtient sa vie, son matériel et sa technique (fiches rédigées pour les plus connus dans `js/guitar/guitarists.js`, sinon résumé automatique de Wikipédia).
+- **Trouver le son** : on enregistre une fois son matériel (guitare, ampli, pédales), puis on tape une chanson, un artiste ou un style ; le site donne sélecteur de micro, chaîne de pédales avec réglages, réglages d’ampli et adaptations au matériel (références dans `js/guitar/tone-data.js`, sinon artiste ou genre déduit de Wikipédia).
 - **Partition → accompagnement** : photo/scan, fichier MusicXML (.musicxml/.xml/.mxl) ou saisie des notes → tonalité, accords proposés (ou repris de la partition), rythmique selon le style et le tempo, parties A/B détectées, écoute, et **fiche PDF d’une page** (accords de chaque partie une seule fois, structure en bas de page).
 
 ## Utilisation

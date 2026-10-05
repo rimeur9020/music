@@ -278,23 +278,130 @@
     ]);
   }
 
+  const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, ' ').trim();
+
+  /** Références de la liste qui correspondent à la recherche (chanson, artiste, style). */
+  function localMatches(query) {
+    const toks = norm(query).split(/[^a-z0-9]+/).filter((t) => t.length >= 2 && ['the', 'le', 'la', 'les', 'de', 'du', 'des', 'of'].indexOf(t) < 0);
+    if (!toks.length) return [];
+    const scored = [];
+    window.TONE_REFS.forEach((r) => {
+      const title = norm(r.title), artist = norm(r.artist || '');
+      const hay = title + ' ' + artist;
+      if (!toks.every((t) => hay.indexOf(t) >= 0)) return;
+      let sc = toks.every((t) => title.indexOf(t) >= 0) ? 3 : 1;
+      if (r.kind === 'artist') sc += 1;
+      if (r.kind === 'style') sc -= 1;
+      if (title === norm(query) || title.split(' (')[0] === norm(query)) sc += 5;
+      scored.push({ r, sc });
+    });
+    return scored.sort((x, y) => y.sc - x.sc).map((x) => x.r.id);
+  }
+
+  const GENRES = [
+    [/shoegaze/, 'st-shoegaze', 'shoegaze'], [/post-rock|ambient/, 'st-ambient', 'post-rock / ambient'],
+    [/grunge/, 'st-grunge', 'grunge'], [/metal/, 'st-metal', 'metal'], [/punk/, 'st-punk', 'punk'],
+    [/reggae|\bska\b/, 'st-reggae', 'reggae'], [/funk|disco/, 'st-funk', 'funk'], [/jazz|swing/, 'st-jazz', 'jazz'],
+    [/country|bluegrass/, 'st-country', 'country'], [/hard rock/, 'st-classic-rock', 'hard rock'], [/blues/, 'st-blues', 'blues'],
+    [/rock independant|indie|garage|rock alternatif|britpop/, 'st-indie', 'rock indé'],
+    [/rock/, 'st-classic-rock', 'rock'], [/pop|chanson|variete|folk|soul|r&b/, 'st-clean-pop', 'pop / chanson']
+  ];
+
+  /** Pour une chanson ou un artiste absent de la liste : on lit Wikipédia pour trouver l'artiste ou le genre. */
+  async function guessFromWikipedia(query) {
+    if (!window.Wiki) return null;
+    const titles = await Wiki.search('fr', query);
+    if (!titles.length) return null;
+    const page = await Wiki.page('fr', titles[0]);
+    if (!page || !page.text) return null;
+    const text = norm(page.text.slice(0, 2500));
+    // même artiste qu'une référence connue ?
+    const artistRef = window.TONE_REFS.filter((r) => r.kind !== 'style').find((r) => {
+      const names = (r.kind === 'artist' ? [r.title.split(' (')[0], r.artist] : [r.artist.split(' – ')[0], r.artist.split(' – ')[1]]).filter(Boolean).map(norm);
+      return names.some((n) => n.length > 3 && text.indexOf(n) >= 0);
+    });
+    if (artistRef) return { refId: artistRef.id, banner: `« ${page.title.replace(/ \(.*\)$/, '')} » n’est pas dans ma liste, mais d’après Wikipédia c’est lié à ${artistRef.kind === 'artist' ? artistRef.title : artistRef.artist} : voici les réglages de « ${artistRef.title} », le son le plus proche.` };
+    const g = GENRES.find(([re]) => re.test(text));
+    if (g) return { refId: g[1], banner: `« ${page.title.replace(/ \(.*\)$/, '')} » n’est pas dans ma liste. D’après Wikipédia, c’est du ${g[2]} : voici les réglages typiques de ce style.` };
+    return null;
+  }
+
+  function gearSummary(gear) {
+    const pedals = gear.pedals.map((id) => (PEDALS.find((p) => p[0] === id) || [id, id])[1].split(' (')[0]);
+    return [GUITARS[gear.guitar].name, AMPS[gear.amp].name.split(' (')[0] + (gear.amp !== 'modeling' && gear.amp !== 'none' ? ', ' + gear.channels + (gear.channels > 1 ? ' canaux' : ' canal') : ''),
+      pedals.length ? pedals.join(', ') : 'pas de pédale'].join(' · ');
+  }
+
   function render(el) {
-    const gear = Object.assign({}, DEFAULT_GEAR, App.store('gear', {}));
+    const stored = App.store('gear', null);
+    const gear = Object.assign({}, DEFAULT_GEAR, stored || {});
     gear.knobs = Object.assign({}, DEFAULT_GEAR.knobs, gear.knobs);
-    let refId = App.store('toneRef', 'back-in-black');
+    let state = App.store('toneState', null); // { query, refId, banner, others }
+    let editing = !stored;
     const saveGear = () => App.save('gear', gear);
 
-    el.appendChild(h('div', { class: 'notice', text: 'Ce sont des réglages de départ : chaque guitare et chaque ampli sonnent différemment. Commence par le gain, puis ajuste les médiums à l’oreille en écoutant le morceau.' }));
-    const layout = h('div', { class: 'tone-layout' });
-    const left = h('div', { class: 'panel' });
-    const right = h('div');
-    layout.appendChild(left);
-    layout.appendChild(right);
-    el.appendChild(layout);
+    const gearBox = h('div', { class: 'panel' });
+    const left = h('div');
+    const input = h('input', { type: 'text', placeholder: 'Une chanson, un artiste ou un style (ex. Back in Black, Nirvana, funk…)' });
+    const btn = h('button', { class: 'btn primary', text: 'Trouver les réglages' });
+    const msg = h('div');
+    const result = h('div');
+    el.appendChild(gearBox);
+    el.appendChild(h('div', { class: 'panel' }, [
+      h('h2', { style: 'margin-top:0', text: '🎯 Le son que tu veux' }),
+      h('div', { class: 'free-search' }, [input, btn]),
+      h('p', { class: 'hint', text: 'Réglages de départ : chaque matériel sonne différemment, ajuste à l’oreille (commence par le gain, puis les médiums).' }),
+      msg
+    ]));
+    el.appendChild(result);
+
+    function drawGearBox() {
+      gearBox.innerHTML = '';
+      if (!editing) {
+        const edit = h('button', { class: 'btn small', text: '✏️ Modifier' });
+        edit.addEventListener('click', () => { editing = true; drawGearBox(); });
+        gearBox.appendChild(h('div', { class: 'gear-summary' }, [
+          h('div', {}, [h('b', { text: '🎛 Ton matériel (enregistré) : ' }), document.createTextNode(gearSummary(gear))]), edit
+        ]));
+        return;
+      }
+      gearBox.appendChild(left);
+      drawGear();
+      const done = h('button', { class: 'btn primary', text: '✔ Enregistrer mon matériel' });
+      done.addEventListener('click', () => { saveGear(); editing = false; drawGearBox(); drawResult(); });
+      gearBox.appendChild(h('div', { style: 'margin-top:.6rem' }, [done]));
+    }
+
+    async function find(q) {
+      q = (q || '').trim();
+      if (!q) return;
+      msg.innerHTML = '';
+      const ids = localMatches(q);
+      if (ids.length) {
+        state = { query: q, refId: ids[0], others: ids.slice(1, 6) };
+        App.save('toneState', state);
+        drawResult();
+        return;
+      }
+      msg.appendChild(h('div', { class: 'feedback info', text: 'Pas dans ma liste : je cherche sur Wikipédia…' }));
+      let guess = null;
+      try { guess = await guessFromWikipedia(q); } catch (e) { guess = null; }
+      msg.innerHTML = '';
+      if (guess) {
+        state = Object.assign({ query: q }, guess);
+        App.save('toneState', state);
+        drawResult();
+        return;
+      }
+      result.innerHTML = '';
+      msg.appendChild(h('div', { class: 'notice warn', text: 'Je n’ai pas trouvé « ' + q + ' ». Essaie le nom de l’artiste, ou un style : ' + window.TONE_REFS.filter((r) => r.kind === 'style').map((r) => r.title.toLowerCase()).join(', ') + '. Tu peux aussi me demander d’ajouter ce son.' }));
+    }
+    btn.addEventListener('click', () => find(input.value));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') find(input.value); });
 
     function drawGear() {
       left.innerHTML = '';
-      left.appendChild(h('h2', { text: '🎛 Ton matériel' }));
+      left.appendChild(h('h2', { style: 'margin-top:0', text: '🎛 Ton matériel' }));
       left.appendChild(App.field('Guitare', App.select(Object.keys(GUITARS).map((k) => ({ value: k, label: GUITARS[k].name })), gear.guitar, (v) => { gear.guitar = v; saveGear(); drawGear(); drawResult(); })));
       if (['hss', 'hh', 'hsh', 'hollow'].indexOf(gear.guitar) >= 0) {
         const cb = h('input', { type: 'checkbox' }); cb.checked = gear.coilSplit;
@@ -326,40 +433,17 @@
         pg.appendChild(h('label', { class: 'checkbox' }, [c, l]));
       });
       left.appendChild(App.field('Mes pédales', pg));
-      left.appendChild(h('p', { class: 'hint', text: 'Ton matériel est enregistré dans ce navigateur.' }));
-    }
-
-    const search = h('input', { type: 'text', placeholder: 'Chercher une chanson, un artiste, un style…' });
-    const list = h('div', { class: 'tone-list' });
-    const result = h('div');
-    right.appendChild(h('div', { class: 'panel' }, [h('h2', { text: '🎯 Le son visé' }), search, list,
-      h('p', { class: 'hint', text: 'Ta chanson n’est pas dans la liste ? Choisis le style le plus proche, ou demande-moi de l’ajouter.' })]));
-    right.appendChild(result);
-    search.addEventListener('input', drawList);
-
-    function drawList() {
-      const q = search.value.trim().toLowerCase();
-      list.innerHTML = '';
-      [['song', 'Chansons'], ['artist', 'Artistes'], ['style', 'Styles']].forEach(([kind, title]) => {
-        const items = window.TONE_REFS.filter((r) => r.kind === kind && (!q || (r.title + ' ' + (r.artist || '') + ' ' + r.desc).toLowerCase().indexOf(q) >= 0));
-        if (!items.length) return;
-        list.appendChild(h('div', { class: 'family', text: title }));
-        const box = h('div', { class: 'tone-chips' });
-        items.forEach((r) => {
-          const b = h('button', { class: 'tone-chip' + (r.id === refId ? ' on' : '') }, [h('b', { text: r.title }), r.artist && kind !== 'artist' ? h('small', { text: r.artist }) : null]);
-          b.addEventListener('click', () => { refId = r.id; App.save('toneRef', refId); drawList(); drawResult(); result.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
-          box.appendChild(b);
-        });
-        list.appendChild(box);
-      });
-      if (!list.children.length) list.appendChild(h('p', { class: 'muted', text: 'Rien trouvé. Essaie un style (rock, blues, funk…).' }));
+      left.appendChild(h('p', { class: 'hint', text: 'Chaque changement est enregistré dans ce navigateur : tu le retrouveras à ta prochaine visite.' }));
     }
 
     function drawResult() {
-      const ref = window.TONE_REFS.find((r) => r.id === refId) || window.TONE_REFS[0];
+      if (!state) return;
+      const ref = window.TONE_REFS.find((x) => x.id === state.refId);
+      if (!ref) return;
       const r = compute(ref, gear);
       result.innerHTML = '';
       const card = h('div', { class: 'panel tone-result' });
+      if (state.banner) card.appendChild(h('div', { class: 'notice', text: state.banner }));
       card.appendChild(h('h2', { text: ref.title + (ref.artist && ref.kind !== 'artist' ? ' — ' + ref.artist : '') }));
       card.appendChild(h('p', { text: ref.desc }));
       if (ref.tuning && ref.tuning !== 'Standard') card.appendChild(h('div', { class: 'notice', html: '<b>Accordage :</b> ' + ref.tuning }));
@@ -405,17 +489,26 @@
         card.appendChild(h('h3', { text: '4. Conseils et adaptations à ton matériel' }));
         card.appendChild(h('ul', {}, tips.map((t) => h('li', { text: t }))));
       }
+      if (state.others && state.others.length) {
+        card.appendChild(h('p', { class: 'hint', text: 'Autres résultats :' }));
+        card.appendChild(h('div', { class: 'chips' }, state.others.map((id) => {
+          const o = window.TONE_REFS.find((x) => x.id === id);
+          const bt = h('button', { class: 'btn small', text: o.title + (o.artist && o.kind === 'song' ? ' (' + o.artist.split(' – ')[0] + ')' : '') });
+          bt.addEventListener('click', () => { state = { query: state.query, refId: id, others: state.others.filter((x) => x !== id).concat([state.refId]) }; App.save('toneState', state); drawResult(); });
+          return bt;
+        })));
+      }
       result.appendChild(card);
     }
 
-    drawGear();
-    drawList();
-    drawResult();
+    drawGearBox();
+    if (state) { input.value = state.query || ''; drawResult(); }
+    else input.focus();
   }
 
   App.register('/guitare/son', {
     title: 'Trouver le son',
-    subtitle: 'Indique ton matériel (guitare, ampli, pédales) et le son que tu veux : tu obtiens les réglages pour t’en approcher avec ce que tu as.',
+    subtitle: 'Enregistre ton matériel une fois, puis tape une chanson, un artiste ou un style : tu obtiens les réglages de guitare, pédales et ampli pour t’en approcher.',
     render
   });
 
