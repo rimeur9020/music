@@ -77,6 +77,7 @@
       card('#/guitare/manche', '🎸', 'Gammes sur le manche', 'Toutes les gammes sur le manche, par position, avec les fondamentales en évidence.'),
       card('#/guitare/formes-accords', '📖', 'Formes d’accords', 'La banque de formes mobiles : chaque forme = un type d’accord, la fondamentale est repérée.'),
       card('#/guitare/jeu-accords', '🎮', 'Jeu : construis l’accord', 'Un nom d’accord s’affiche : place les doigts sur le manche pour le jouer.'),
+      card('#/guitare/guitaristes', '⭐', 'Guitaristes', 'La vie, le matériel et la technique des grands guitaristes.'),
       card('#/guitare/son', '🎛', 'Trouver le son', 'Ton matériel + le son d’une chanson ou d’un artiste = les réglages de guitare, pédales et ampli.'),
       card('#/guitare/accompagnement', '📄', 'Partition → accompagnement', 'Importe ou scanne une partition : accords, rythmique selon le style, fiche PDF d’une page.')
     ]));

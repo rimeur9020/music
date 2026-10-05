@@ -384,3 +384,15 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .pedal.delay { border-color: #1971c2; } .pedal.reverb { border-color: #5f3dc4; } .pedal.chorus, .pedal.vibe, .pedal.phaser, .pedal.flanger { border-color: #0c8599; }
 .tone-result h3 { margin-top: 1.2rem; }
 @media (max-width: 800px) { .tone-layout { grid-template-columns: 1fr; } }
+
+/* ---------- Guitaristes ---------- */
+.gtr-list { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
+.gtr-card { margin-top: 1rem; }
+.gtr-name { font-size: 1.8rem; margin-bottom: .3rem; }
+.gtr-meta { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; color: var(--muted); }
+.gtr-band { display: inline-block; padding: .2rem .6rem; border-radius: 999px; background: var(--guitar-soft); color: var(--guitar); font-weight: 600; font-size: .88rem; }
+.gtr-section { margin-top: 1.4rem; padding-bottom: .3rem; border-bottom: 2px solid var(--guitar-soft); }
+.gtr-gear { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .7rem; }
+.gtr-gear-item { background: var(--surface-2); border-radius: 10px; padding: .6rem .8rem; }
+.gtr-gear-item p { margin: .2rem 0 0; }
+.gtr-gear-title { font-weight: 800; }
