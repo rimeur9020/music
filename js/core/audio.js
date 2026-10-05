@@ -16,9 +16,62 @@
       master.connect(vol);
       vol.connect(ctx.destination);
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    // iOS / iPadOS : l'état peut être « suspended » ou « interrupted »
+    if (ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
     return ctx;
   }
+
+  /* ------------------------------------------------------------------ */
+  /* Déblocage du son sur iPhone / iPad                                  */
+  /* ------------------------------------------------------------------ */
+  // Safari iOS coupe le son des sites en mode silencieux et n'autorise l'audio qu'après un geste.
+  // On (1) demande la catégorie « lecture » (comme une appli de musique), (2) joue un son muet
+  // dans le geste de l'utilisateur, (3) garde un élément <audio> silencieux pour ignorer le mode silencieux.
+  let silentEl = null;
+  function silentWavUrl() {
+    const n = 4410; // 0,1 s à 44,1 kHz, 8 bits mono
+    const buf = new ArrayBuffer(44 + n);
+    const v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 44100, true); v.setUint32(28, 44100, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+    str(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  function unlock() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+    const c = ac();
+    try {
+      const b = c.createBuffer(1, 1, 22050);
+      const s = c.createBufferSource();
+      s.buffer = b;
+      s.connect(c.destination);
+      s.start(0);
+    } catch (e) { /* ignore */ }
+    const isIOS = /iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document;
+    if (!silentEl && isIOS) {
+      try {
+        silentEl = document.createElement('audio');
+        silentEl.setAttribute('playsinline', '');
+        silentEl.setAttribute('x-webkit-airplay', 'deny');
+        silentEl.loop = true;
+        silentEl.preload = 'auto';
+        silentEl.src = silentWavUrl();
+        const p = silentEl.play();
+        if (p && p.catch) p.catch(() => { silentEl = null; });
+      } catch (e) { silentEl = null; }
+    }
+    if (c.state === 'running' && (silentEl || !isIOS)) {
+      ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown'].forEach((ev) => document.removeEventListener(ev, unlock, true));
+    }
+  }
+  ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown'].forEach((ev) => document.addEventListener(ev, unlock, true));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+  });
 
   function now() { return ac().currentTime; }
 
