@@ -452,6 +452,93 @@
   }
 
   /* ================================================================== */
+  /* PDF                                                                 */
+  /* ================================================================== */
+  function loadJsPdf() {
+    if (window.jspdf) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'vendor/jspdf.umd.min.js'; s.onload = res; s.onerror = () => rej(new Error('jsPDF introuvable'));
+      document.head.appendChild(s);
+    });
+  }
+  const pdfText = (t) => String(t).replace(/♭/g, 'b').replace(/♯/g, '#').replace(/[×]/g, 'x');
+
+  /** Diagramme dans le PDF, même dessin que sur la page. (x, y) = coin haut gauche, largeur ≈ 30 mm. */
+  function pdfDiagram(doc, name, p, x, y) {
+    const sw = 5, fh = 5.2, nf = 5, left = x + 4, top = y + 11;
+    const sx = (s) => left + s * sw;
+    const sh = p.shape;
+    const played = p.frets.filter((f) => f != null && f > 0);
+    const base = Math.max(...played.concat([1])) <= 5 ? 1 : Math.max(1, Math.min(...played));
+    const cy = (f) => top + (f - base) * fh + fh / 2;
+    doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text(pdfText(name), left + 2.5 * sw, y + 4, { align: 'center' });
+    doc.setDrawColor(0); doc.setLineWidth(0.25);
+    for (let s = 0; s < 6; s++) doc.line(sx(s), top, sx(s), top + nf * fh);
+    for (let f = 0; f <= nf; f++) { doc.setLineWidth(f === 0 && base === 1 ? 1 : 0.25); doc.line(sx(0), top + f * fh, sx(5), top + f * fh); }
+    if (base > 1) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.text(base + 'fr', sx(0) - 1, top + fh * 0.7, { align: 'right' }); }
+    // barré
+    const minF = played.length ? Math.min(...played) : 0;
+    const atMin = p.frets.map((f, s) => (f === minF && f > 0 ? s : -1)).filter((s) => s >= 0);
+    const last = p.frets.reduce((a, f, s) => (f != null ? s : a), -1);
+    if (atMin.length >= 3 && atMin[atMin.length - 1] === last) {
+      doc.setLineWidth(0.5);
+      const a = sx(atMin[0]), b = sx(last), yy = top + (minF - base) * fh - 0.4;
+      doc.lines([[(b - a) * 0.25, -2.6, (b - a) * 0.75, -2.6, b - a, 0]], a, yy, [1, 1], 'S');
+    }
+    sh.strings.forEach((st, s) => {
+      const f = p.frets[s];
+      if (!st) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('x', sx(s), top - 1.2, { align: 'center' }); return; }
+      const yy = cy(f);
+      if (st.root) { doc.setDrawColor(217, 72, 15); doc.setFillColor(255, 255, 255); doc.setLineWidth(0.7); doc.circle(sx(s), yy, 1.7, 'FD'); doc.setDrawColor(0); }
+      else { doc.setFillColor(0); doc.circle(sx(s), yy, 1.5, 'F'); }
+      if (st.optional) { doc.setLineWidth(0.2); doc.setLineDashPattern([0.6, 0.5], 0); doc.circle(sx(s), yy, 2.4, 'S'); doc.setLineDashPattern([], 0); }
+    });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(110);
+    doc.text(pdfText('forme ' + sh.name + (p.simplified ? ' (simpl.)' : '')), left + 2.5 * sw, top + nf * fh + 4, { align: 'center' });
+    doc.setTextColor(0);
+  }
+
+  async function makePdf(title, seq, list) {
+    await loadJsPdf();
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, M = 15;
+    let y = 18;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
+    doc.text(pdfText(title || 'Grille d’accords'), W / 2, y, { align: 'center' }); y += 10;
+    // grille : 4 accords par ligne, comme des mesures
+    doc.setFontSize(11); doc.text('Grille', M, y); y += 3;
+    const per = 4, cw = (W - 2 * M) / per, rh = 9;
+    for (let i = 0; i < seq.length; i += per) {
+      if (y + rh > 280) { doc.addPage(); y = 18; }
+      doc.setLineWidth(0.3);
+      for (let k = 0; k <= per; k++) doc.line(M + k * cw, y, M + k * cw, y + rh);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+      seq.slice(i, i + per).forEach((c, k) => doc.text(pdfText(c), M + k * cw + 3, y + 6.3));
+      y += rh + 1.5;
+    }
+    // les accords sur le manche
+    y += 6;
+    if (y > 240) { doc.addPage(); y = 18; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Les accords sur la guitare', M, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110);
+    doc.text('Rond orange = fondamentale, x = corde étouffée, pointillés = note facultative, « 5fr » = commence à la 5e case.', M, y + 4.5);
+    doc.setTextColor(0);
+    y += 8;
+    const dw = 36, dh = 50, cols = Math.floor((W - 2 * M) / dw);
+    list.forEach((it, i) => {
+      if (!it.p) return;
+      const col = i % cols;
+      if (i > 0 && col === 0) y += dh;
+      if (y + dh > 290) { doc.addPage(); y = 18; }
+      pdfDiagram(doc, it.name, it.p, M + col * dw, y);
+    });
+    const file = (title || 'grille-accords').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'grille-accords';
+    doc.save(file + '.pdf');
+  }
+
+  /* ================================================================== */
   /* Page                                                                */
   /* ================================================================== */
   function render(el) {
@@ -500,39 +587,56 @@
     function draw() {
       result.innerHTML = '';
       const panel = h('div', { class: 'panel' });
-      // liste des accords lus (correction possible)
+      // liste des accords lus : chaque case se modifie directement
       panel.appendChild(h('h2', { style: 'margin-top:0', text: 'Accords trouvés' }));
+      panel.appendChild(h('p', { class: 'hint', text: 'Si je me suis trompé, corrige directement dans les cases (ex. Am7, D-7, G7(b9), Bbmaj7…). ✕ supprime, ＋ insère un accord juste après. En orange : lecture incertaine, à vérifier.' }));
       const chips = h('div', { class: 'sc-chips' });
+      const save = () => App.save('scoreChords', items);
       items.forEach((it, i) => {
         const chip = h('span', { class: 'sc-chip' + (it.sure ? '' : ' unsure') });
-        const b = h('button', { class: 'sc-name', text: it.text, title: 'Corriger' });
-        b.addEventListener('click', () => {
-          const v = prompt('Corriger l’accord (vide = supprimer) :', it.text);
-          if (v === null) return;
-          if (!v.trim()) items.splice(i, 1);
-          else if (parseChord(v)) { it.text = normalize(v); it.sure = true; } else { alert('« ' + v + ' » n’est pas un accord reconnu.'); return; }
-          App.save('scoreChords', items); draw();
+        chip.appendChild(h('small', { class: 'sc-num', text: String(i + 1) }));
+        const inp = h('input', { class: 'sc-edit', type: 'text', value: it.text, 'aria-label': 'Accord n° ' + (i + 1), autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
+        const fit = () => { inp.style.width = Math.max(2.5, inp.value.length + 1) + 'ch'; };
+        fit();
+        inp.addEventListener('input', () => { fit(); chip.classList.toggle('bad', !!inp.value.trim() && !parseChord(inp.value)); });
+        const commit = () => {
+          const v = inp.value.trim();
+          if (v === it.text) return;
+          if (!v) { items.splice(i, 1); save(); draw(); return; }
+          if (!parseChord(v)) { chip.classList.add('bad'); return; }
+          it.text = normalize(v); it.sure = true;
+          save(); draw();
+        };
+        inp.addEventListener('change', commit);
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+        const plus = h('button', { class: 'sc-x', text: '＋', title: 'Insérer un accord après' });
+        plus.addEventListener('click', () => {
+          const v = prompt('Accord à insérer après « ' + it.text + ' » :', '');
+          if (!v || !v.trim()) return;
+          if (!parseChord(v)) { alert('« ' + v + ' » n’est pas un accord reconnu.'); return; }
+          items.splice(i + 1, 0, { text: normalize(v), sure: true }); save(); draw();
         });
         const x = h('button', { class: 'sc-x', text: '✕', title: 'Supprimer' });
-        x.addEventListener('click', () => { items.splice(i, 1); App.save('scoreChords', items); draw(); });
-        chip.appendChild(b); chip.appendChild(x);
+        x.addEventListener('click', () => { items.splice(i, 1); save(); draw(); });
+        chip.appendChild(inp); chip.appendChild(plus); chip.appendChild(x);
         chips.appendChild(chip);
       });
       if (!items.length) chips.appendChild(h('span', { class: 'muted', text: 'Aucun accord pour l’instant.' }));
       panel.appendChild(chips);
-      if (items.some((x) => !x.sure)) panel.appendChild(h('p', { class: 'hint', text: 'En orange : lecture incertaine, vérifie (touche pour corriger).' }));
-      const add = h('input', { type: 'text', placeholder: 'Ajouter des accords : ex. C G Am F' });
+      const add = h('input', { type: 'text', placeholder: 'Ajouter à la fin : ex. C G Am F' });
       const addBtn = h('button', { class: 'btn small', text: '+ Ajouter' });
       const doAdd = () => {
         const bad = [];
         add.value.split(/[\s;|]+/).filter(Boolean).forEach((t) => { if (parseChord(t)) items.push({ text: normalize(t), sure: true }); else bad.push(t); });
         add.value = bad.join(' ');
-        App.save('scoreChords', items); draw();
+        save(); draw();
         if (bad.length) alert('Non reconnu : ' + bad.join(', '));
       };
       addBtn.addEventListener('click', doAdd);
       add.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
-      panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn]));
+      const clear = h('button', { class: 'btn small', text: '🗑 Tout effacer' });
+      clear.addEventListener('click', () => { if (confirm('Effacer tous les accords ?')) { items = []; save(); draw(); } });
+      panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn, clear]));
       result.appendChild(panel);
 
       // les accords sur la guitare (chacun une seule fois, dans l'ordre d'apparition)
@@ -544,6 +648,7 @@
       gp.appendChild(h('p', { class: 'hint', text: 'Formes fermées de la fiche d’accords (jamais de cordes à vide, pour un son jazz). Rond orange = fondamentale, × = corde étouffée, pointillés = note facultative, « 5fr » = la forme commence à la 5e case. Touche un accord pour l’entendre, ↻ pour l’autre forme.' }));
       const grid = h('div', { class: 'sc-grid' });
       const choice = App.store('scoreShape', {});
+      const chosen = {};
       names.forEach((n) => {
         const ch = parseChord(n);
         const opts = ch ? shapesFor(ch) : [];
@@ -551,6 +656,7 @@
         card.appendChild(h('div', { class: 'sc-title', text: n }));
         if (!opts.length) { card.appendChild(h('div', { class: 'muted', text: '?' })); grid.appendChild(card); return; }
         const p = opts[(choice[n] || 0) % opts.length];
+        chosen[n] = p;
         const btn = h('button', { class: 'sc-btn', title: 'Écouter' }, [diagram(p)]);
         btn.addEventListener('click', () => play(p));
         card.appendChild(btn);
@@ -566,6 +672,22 @@
       });
       gp.appendChild(grid);
       result.appendChild(gp);
+
+      // PDF une fois les corrections terminées
+      const pp = h('div', { class: 'panel' });
+      pp.appendChild(h('h2', { style: 'margin-top:0', text: '📄 Faire le PDF' }));
+      pp.appendChild(h('p', { class: 'hint', text: 'Quand tu as fini de corriger, donne un titre et télécharge la fiche : la grille des accords dans l’ordre, puis chaque accord sur le manche (les formes choisies ci-dessus).' }));
+      const title = h('input', { type: 'text', placeholder: 'Titre du morceau (facultatif)', value: App.store('scoreTitle', '') });
+      title.addEventListener('change', () => App.save('scoreTitle', title.value));
+      const go = h('button', { class: 'btn primary', text: '⬇ Télécharger le PDF' });
+      go.addEventListener('click', async () => {
+        go.disabled = true; go.textContent = 'Création du PDF…';
+        try { await makePdf(title.value.trim(), items.map((x) => x.text), names.map((n) => ({ name: n, p: chosen[n] }))); }
+        catch (e) { alert('Impossible de créer le PDF : ' + e.message); }
+        go.disabled = false; go.textContent = '⬇ Télécharger le PDF';
+      });
+      pp.appendChild(h('div', { class: 'free-search' }, [title, go]));
+      result.appendChild(pp);
     }
     draw();
   }
