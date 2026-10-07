@@ -508,6 +508,54 @@
   }
 
   /* ================================================================== */
+  /* Forme A A B A                                                       */
+  /* ================================================================== */
+  const simil = (x, y) => (x.length || y.length ? 1 - lev(x, y) / Math.max(x.length, y.length) : 1);
+  /** Ressemblance de deux A : ils commencent pareil (la fin peut changer). */
+  function similA(x, y) {
+    let p = 0; while (p < x.length && p < y.length && x[p] === y[p]) p++;
+    return 0.5 * simil(x, y) + 0.5 * p / Math.min(x.length, y.length);
+  }
+
+  /**
+   * Cherche la forme jazz A A B A dans la suite d'accords.
+   * Les A se ressemblent (ils peuvent finir un peu différemment), le B est différent.
+   * Retourne { marks: [début 2e A, début B, début dernier A], score, ok } ou null.
+   */
+  function detectAABA(seq) {
+    const k = seq.map((c) => normalize(c).toLowerCase());
+    const N = k.length;
+    if (N < 4) return null;
+    let best = null;
+    for (let a2 = 1; a2 <= N - 3; a2++) {
+      const A1 = k.slice(0, a2), L = a2;
+      const lo = Math.max(1, Math.floor(L * 0.6)), hi = Math.ceil(L * 1.4);
+      for (let b = a2 + lo; b <= Math.min(N - 2, a2 + hi); b++) {
+        const A2 = k.slice(a2, b);
+        const s12 = similA(A1, A2);
+        if (s12 < 0.3) continue;
+        for (let a3 = b + 1; a3 <= N - 1; a3++) {
+          const len3 = N - a3;
+          if (len3 < lo || len3 > hi) continue;
+          const B = k.slice(b, a3), A3 = k.slice(a3);
+          const s13 = similA(A1, A3), s1b = simil(A1, B);
+          // les trois A ont en général la même longueur ; le B est différent des A
+          const score = (s12 + s13) / 2 - 0.35 * s1b - 0.15 * Math.abs(B.length - L) / L - 0.25 * (Math.abs(A2.length - L) + Math.abs(A3.length - L) + Math.abs(A2.length - A3.length)) / L;
+          if (!best || score > best.score) best = { marks: [a2, b, a3], score, sA: (s12 + s13) / 2, sB: s1b };
+        }
+      }
+    }
+    if (!best) return null;
+    best.ok = best.sA >= 0.6 && best.sB < 0.8;
+    return best;
+  }
+  /** Les 4 parties à partir des 3 débuts. */
+  function sections(seq, m) {
+    return [['A', 0, m[0]], ['A', m[0], m[1]], ['B', m[1], m[2]], ['A', m[2], seq.length]]
+      .map(([label, s, e], i) => ({ label, n: i, start: s, end: e, chords: seq.slice(s, e) }));
+  }
+
+  /* ================================================================== */
   /* PDF                                                                 */
   /* ================================================================== */
   function loadJsPdf() {
@@ -556,24 +604,41 @@
     doc.setTextColor(0);
   }
 
-  async function makePdf(title, seq, list) {
+  async function makePdf(title, seq, list, form) {
     await loadJsPdf();
     const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
     const W = 210, M = 15;
     let y = 18;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
     doc.text(pdfText(title || 'Grille d’accords'), W / 2, y, { align: 'center' }); y += 10;
-    // grille : 4 accords par ligne, comme des mesures
-    doc.setFontSize(11); doc.text('Grille', M, y); y += 3;
-    const per = 4, cw = (W - 2 * M) / per, rh = 9;
-    for (let i = 0; i < seq.length; i += per) {
-      if (y + rh > 280) { doc.addPage(); y = 18; }
-      doc.setLineWidth(0.3);
-      for (let k = 0; k <= per; k++) doc.line(M + k * cw, y, M + k * cw, y + rh);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-      seq.slice(i, i + per).forEach((c, k) => doc.text(pdfText(c), M + k * cw + 3, y + 6.3));
-      y += rh + 1.5;
+    // forme A A B A : résumé des parties
+    if (form) {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text('Forme : A A B A', M, y); y += 6;
+      [['A', form[0]], ['B', form[2]]].forEach(([l, sec]) => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Partie ' + l + ' :', M, y);
+        doc.setFont('helvetica', 'normal');
+        doc.splitTextToSize(sec.chords.map(pdfText).join('  |  '), W - 2 * M - 22).forEach((ln) => { doc.text(ln, M + 22, y); y += 5.5; });
+        y += 1;
+      });
+      y += 3;
     }
+    // grille : 4 accords par ligne, comme des mesures (partie par partie si la forme est connue)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Grille', M, y); y += 3;
+    const blocks = form ? form.map((sec) => ({ label: sec.label, chords: sec.chords })) : [{ label: '', chords: seq }];
+    const lab = form ? 9 : 0, per = 4, cw = (W - 2 * M - lab) / per, rh = 9;
+    blocks.forEach((bl) => {
+      for (let i = 0; i < bl.chords.length; i += per) {
+        if (y + rh > 280) { doc.addPage(); y = 18; }
+        if (i === 0 && bl.label) { doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(bl.label, M + 1, y + 6.5); }
+        doc.setLineWidth(0.3);
+        for (let k = 0; k <= per; k++) doc.line(M + lab + k * cw, y, M + lab + k * cw, y + rh);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+        bl.chords.slice(i, i + per).forEach((c, k) => doc.text(pdfText(c), M + lab + k * cw + 3, y + 6.3));
+        y += rh + 1.5;
+      }
+      if (form) y += 2.5;
+    });
     // les accords sur le manche
     y += 6;
     if (y > 240) { doc.addPage(); y = 18; }
@@ -630,6 +695,7 @@
         let found = boxes.length ? await readHighlights(big, boxes, step) : [];
         if (!found.length) found = await readPage(big, step);
         items = fixWeird(found);
+        App.save('scoreAB', { mode: 'auto', marks: null });
         App.save('scoreChords', items);
         status.innerHTML = '';
         if (!items.length) status.appendChild(h('div', { class: 'notice warn', text: 'Je n’ai trouvé aucun accord sur cette photo. Essaie une photo plus nette et plus droite, ou écris les accords ci-dessous.' }));
@@ -639,6 +705,79 @@
         status.appendChild(h('div', { class: 'notice warn', text: 'Erreur : ' + e.message }));
       }
     });
+
+    /* ---------- parties A et B ---------- */
+    const abState = () => Object.assign({ mode: 'auto', marks: null }, App.store('scoreAB', {}));
+    const validMarks = (m, N) => m && m.length === 3 && m[0] >= 1 && m[0] < m[1] && m[1] < m[2] && m[2] < N;
+    /** Les 4 parties retenues (choix manuel, sinon détection), ou null. */
+    function currentForm() {
+      const st = abState(), seq = items.map((x) => x.text);
+      if (st.mode === 'no') return null;
+      if (validMarks(st.marks, seq.length)) return sections(seq, st.marks);
+      const d = detectAABA(seq);
+      return d && (d.ok || st.mode === 'yes') ? sections(seq, d.marks) : null;
+    }
+    function formPanel() {
+      const st = abState(), seq = items.map((x) => x.text), N = seq.length;
+      const pan = h('div', { class: 'panel' });
+      pan.appendChild(h('h2', { style: 'margin-top:0', text: '🧩 Parties A et B (forme A A B A)' }));
+      if (N < 4) { pan.appendChild(h('p', { class: 'muted', text: 'Il faut au moins 4 accords.' })); return pan; }
+      const setState = (o) => { App.save('scoreAB', Object.assign(abState(), o)); draw(); };
+      // y a-t-il des parties A et B ?
+      const seg = h('div', { class: 'segmented', style: 'margin-bottom:.6rem' });
+      [['auto', '🤖 Trouve tout seul'], ['yes', '✅ Il y a A et B'], ['no', '❌ Pas de A / B']].forEach(([id, l]) => {
+        const b = h('button', { class: st.mode === id ? 'on' : '', text: l });
+        b.addEventListener('click', () => setState({ mode: id }));
+        seg.appendChild(b);
+      });
+      pan.appendChild(seg);
+      if (st.mode === 'no') { pan.appendChild(h('p', { class: 'hint', text: 'D’accord : pas de parties A / B pour ce morceau.' })); return pan; }
+      const manual = validMarks(st.marks, N);
+      const det = manual ? null : detectAABA(seq);
+      const marks = manual ? st.marks : det && (det.ok || st.mode === 'yes') ? det.marks : null;
+      if (!marks) {
+        pan.appendChild(h('div', { class: 'notice warn', text: 'Je ne trouve pas de forme A A B A claire. Aide-moi : indique ci-dessous où commence chaque partie, ou dis-moi qu’il n’y a pas de A / B.' }));
+      } else {
+        const secs = sections(seq, marks);
+        pan.appendChild(h('p', { class: 'hint', text: manual ? 'Parties placées par toi.' : 'Parties trouvées automatiquement : vérifie, et ajuste ci-dessous si besoin.' }));
+        [['A', secs[0]], ['B', secs[2]]].forEach(([l, sec]) => {
+          pan.appendChild(h('div', { class: 'ab-row' }, [h('span', { class: 'ab-tag ab-' + l, text: l }),
+            h('div', { class: 'ab-chords' }, sec.chords.map((c) => h('span', { class: 'ab-chord', text: c })))]));
+        });
+        // les A qui ne sont pas exactement pareils
+        const A1 = secs[0].chords.join(' ');
+        [[secs[1], '2e A'], [secs[3], 'dernier A']].forEach(([sec, nm]) => {
+          if (sec.chords.join(' ') !== A1) pan.appendChild(h('p', { class: 'hint', text: 'Le ' + nm + ' est un peu différent : ' + sec.chords.join(' – ') }));
+        });
+        pan.appendChild(h('p', { class: 'ab-order' }, secs.map((sc) => h('span', { class: 'ab-tag ab-' + sc.label, text: sc.label, title: `accords n° ${sc.start + 1} à ${sc.end}` }))));
+        pan.appendChild(h('p', { class: 'hint', text: secs.map((sc, i) => `${['1er A', '2e A', 'B', 'dernier A'][i]} : accords n° ${sc.start + 1} à ${sc.end}`).join(' · ') }));
+      }
+      // outil pour aider à trouver les parties
+      const tool = h('details', { class: 'ab-tool' });
+      if (!marks || manual) tool.open = true;
+      tool.appendChild(h('summary', { text: '✏️ Placer les parties moi-même' }));
+      tool.appendChild(h('p', { class: 'hint', text: 'Choisis l’accord où commence chaque partie (le 1er A commence toujours au 1er accord).' }));
+      const cur = marks || [Math.max(1, Math.round(N / 4)), Math.max(2, Math.round(N / 2)), Math.max(3, Math.round(3 * N / 4))];
+      const sels = ['Le 2e A commence à', 'Le B commence à', 'Le dernier A commence à'].map((lbl, j) => {
+        const sel = h('select');
+        seq.forEach((c, i) => { if (i === 0) return; const o = h('option', { value: String(i), text: `n° ${i + 1} : ${c}` }); if (i === cur[j]) o.selected = true; sel.appendChild(o); });
+        tool.appendChild(h('label', { class: 'ab-field' }, [h('span', { text: lbl }), sel]));
+        return sel;
+      });
+      const ok = h('button', { class: 'btn primary small', text: 'Valider ces parties' });
+      const errBox = h('div');
+      ok.addEventListener('click', () => {
+        const m = sels.map((x) => +x.value);
+        if (!validMarks(m, N)) { errBox.innerHTML = ''; errBox.appendChild(h('div', { class: 'notice warn', text: 'Les parties doivent se suivre : 2e A, puis B, puis dernier A.' })); return; }
+        setState({ marks: m, mode: 'yes' });
+      });
+      const reset = h('button', { class: 'btn small', text: '↺ Revenir à la détection automatique' });
+      reset.addEventListener('click', () => setState({ marks: null, mode: 'auto' }));
+      tool.appendChild(h('div', { class: 'btn-row' }, [ok, reset]));
+      tool.appendChild(errBox);
+      pan.appendChild(tool);
+      return pan;
+    }
 
     function draw() {
       result.innerHTML = '';
@@ -697,6 +836,7 @@
       clear.addEventListener('click', () => { if (confirm('Effacer tous les accords ?')) { items = []; save(); draw(); } });
       panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn, clear]));
       result.appendChild(panel);
+      result.appendChild(formPanel());
 
       // les accords sur la guitare (chacun une seule fois, dans l'ordre d'apparition)
       const names = [];
@@ -741,7 +881,7 @@
       const go = h('button', { class: 'btn primary', text: '⬇ Télécharger le PDF' });
       go.addEventListener('click', async () => {
         go.disabled = true; go.textContent = 'Création du PDF…';
-        try { await makePdf(title.value.trim(), items.map((x) => x.text), names.map((n) => ({ name: n, p: chosen[n] }))); }
+        try { await makePdf(title.value.trim(), items.map((x) => x.text), names.map((n) => ({ name: n, p: chosen[n] })), currentForm()); }
         catch (e) { alert('Impossible de créer le PDF : ' + e.message); }
         go.disabled = false; go.textContent = '⬇ Télécharger le PDF';
       });
@@ -757,5 +897,5 @@
     render
   });
 
-  window.ScoreChords = { parseChord, shapesFor, readChord, plausible, fixWeird };
+  window.ScoreChords = { parseChord, shapesFor, readChord, plausible, fixWeird, detectAABA };
 })();

@@ -449,3 +449,14 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .sc-chip input.sc-edit { box-sizing: content-box; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; font: inherit; font-weight: 700; color: var(--text); padding: 2px 1px; margin: 0; min-width: 2.5ch; max-width: 14ch; box-shadow: none; outline: none; }
 .sc-chip input.sc-edit:focus { border-bottom-color: var(--guitar); }
 .sc-was { font-size: .68rem; color: var(--muted); margin-left: 2px; white-space: nowrap; }
+.ab-row { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; }
+.ab-tag { display: inline-grid; place-items: center; min-width: 2em; height: 2em; border-radius: 8px; color: #fff; font-weight: 800; flex: none; }
+.ab-A { background: #1971c2; }
+.ab-B { background: #e8590c; }
+.ab-chords { display: flex; flex-wrap: wrap; gap: 6px; }
+.ab-chord { border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-weight: 700; background: var(--surface-2); }
+.ab-order { display: flex; gap: 6px; align-items: center; margin: 10px 0 2px; }
+.ab-tool { margin-top: .8rem; border-top: 1px solid var(--border); padding-top: .6rem; }
+.ab-tool summary { cursor: pointer; font-weight: 700; }
+.ab-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.ab-field span { min-width: 12em; }
