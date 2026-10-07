@@ -98,7 +98,7 @@
     const maxF = played.length ? Math.max(...played) : 0;
     const minF = played.length ? Math.min(...played) : 0;
     const base = maxF <= 5 ? 1 : minF;
-    p.push({ t: 'text', x: 30, y: 9, s: name, size: name.length > 8 ? Math.max(5.5, 9.5 * 8 / name.length) : 9.5, bold: true, anchor: 'middle' });
+    p.push({ t: 'text', x: 30, y: 9, s: name, size: 9.5, bold: true, anchor: 'middle' });
     for (let s = 0; s < 6; s++) p.push({ t: 'line', x1: sx(s), y1: top, x2: sx(s), y2: top + fretH * nFrets, w: 0.6 });
     for (let f = 0; f <= nFrets; f++) p.push({ t: 'line', x1: left, y1: top + f * fretH, x2: right, y2: top + f * fretH, w: f === 0 && base === 1 && !v.movable ? 2.4 : 0.6 });
     if (base > 1 && !v.movable) p.push({ t: 'text', x: right + 2, y: top + fretH * 0.7, s: base + 'fr', size: 6.5, anchor: 'start' });
@@ -117,14 +117,6 @@
         p.push({ t: 'circle', cx: sx(s), cy: top + (f - base) * fretH + fretH / 2, r: 3.4, fill: true });
       }
     });
-    // fondamentale repérée (rond orange), comme sur la fiche
-    if (v.roots) {
-      v.roots.forEach((s) => {
-        const f = v.frets[s];
-        if (f > 0) p.push({ t: 'circle', cx: sx(s), cy: top + (f - base) * fretH + fretH / 2, r: 3.6, fill: true, root: true });
-        else if (f === 0) p.push({ t: 'circle', cx: sx(s), cy: top - 5, r: 2.4, fill: true, root: true });
-      });
-    }
     if (v.movable && v.rootString != null) {
       const f = v.frets[v.rootString];
       const cy = top + (f - base) * fretH + fretH / 2;

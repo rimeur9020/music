@@ -1,0 +1,579 @@
+/*
+ * Partition → accords.
+ * 1. On trouve les accords écrits sur la photo de la partition (lecture automatique Tesseract.js).
+ * 2. Chaque accord est dessiné sur la guitare avec la forme correspondante de la fiche d'accords
+ *    (banque de formes, js/guitar/shape-bank.js), posée à la bonne case.
+ */
+(function () {
+  'use strict';
+  const { h } = App;
+  const M = Music;
+  const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  const TUNING = [40, 45, 50, 55, 59, 64];
+
+  /* ================================================================== */
+  /* 1. Nom d'accord → notes                                             */
+  /* ================================================================== */
+  const ROOTS = '(?:[A-G]|Do|Ré|Re|Mi|Fa|Sol|La|Si)';
+  const NAME_RE = new RegExp('^(' + ROOTS + ')([#b]?)(.*?)(?:/(' + ROOTS + ')([#b]?))?$');
+  const FR = { Do: 'C', 'Ré': 'D', Re: 'D', Mi: 'E', Fa: 'F', Sol: 'G', La: 'A', Si: 'B' };
+  const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const pcOf = (l, acc) => M.mod(PC[FR[l] || l] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0), 12);
+  const ALT = { b5: 6, '#5': 8, b6: 8, b9: 1, '#9': 3, '#11': 6, b13: 8 };
+  const ADD = { 2: 2, 4: 5, 6: 9, 9: 2, 11: 5, 13: 9 };
+
+  function normalize(t) {
+    return String(t || '').trim().replace(/♯/g, '#').replace(/♭/g, 'b').replace(/[−–—]/g, '-').replace(/\s+/g, '');
+  }
+
+  /**
+   * Comprend les notations classiques (Am7, F#m7b5, Cmaj7, Gsus4, D/F#, Lam…) et celles de la fiche :
+   * -7, +, +7, -7(b5), -maj7, add2, -add4, -(b6), -6/9, 7(b9,#5), 7(9,13), -9+7, maj7(#5,#11), 13sus4…
+   * Retourne { name, root, bass, ivs } ou null.
+   */
+  function parseChord(raw) {
+    const t = normalize(raw);
+    const m = NAME_RE.exec(t);
+    if (!m) return null;
+    const s = m[3];
+    let third = 4, fifth = 7, sev = null, sus = null, power = false, majSev = false, minor = false;
+    const ext = new Set();
+    let i = 0;
+    const eat = (re) => { const r = re.exec(s.slice(i)); if (r) { i += r[0].length; return r; } return null; };
+    const num = (n) => {
+      const sv = majSev ? 11 : 10;
+      if (n === '5') power = true;
+      else if (n === '6/9' || n === '69') { ext.add(9); ext.add(2); }
+      else if (n === '6') ext.add(9);
+      else if (n === '7') sev = sv;
+      else if (n === '9') { sev = sv; ext.add(2); }
+      else if (n === '11') { sev = sv; ext.add(2); ext.add(5); if (!minor) sus = 5; }
+      else if (n === '13') { sev = sv; ext.add(2); ext.add(9); }
+    };
+    // qualité
+    if (eat(/^(maj|Maj|MAJ|Δ|M(?!in|i))/)) { majSev = true; if (/Δ$/.test(s.slice(0, i)) && !/^[0-9]/.test(s.slice(i))) sev = 11; }
+    else if (eat(/^(min|mi|m|-)/)) { minor = true; third = 3; }
+    else if (eat(/^(dim|°)/)) { third = 3; fifth = 6; if (eat(/^7/)) sev = 9; }
+    else if (eat(/^ø7?/)) { minor = true; third = 3; fifth = 6; sev = 10; }
+    else if (eat(/^(aug|\+)/)) fifth = 8;
+    if (minor && eat(/^\(?(maj|Maj|Δ|M)7?\)?/)) { majSev = true; if (!/^[0-9]/.test(s.slice(i))) sev = 11; }
+    const n = eat(/^(6\/9|69|13|11|9|7|6|5)/);
+    if (n) num(n[1]);
+    while (i < s.length) {
+      let r;
+      if (eat(/^[(),]/)) continue;
+      if ((r = eat(/^sus(2|4)?/))) { sus = r[1] === '2' ? 2 : 5; continue; }
+      if ((r = eat(/^add(2|4|6|9|11|13)/))) { ext.add(ADD[r[1]]); continue; }
+      if (eat(/^(maj7|Maj7|M7|Δ7?|\+7)/)) { sev = 11; continue; }
+      if (eat(/^alt/)) { sev = sev || 10; ext.add(1); ext.add(3); ext.add(8); continue; }
+      if ((r = eat(/^([b#+-])(5|6|9|11|13)/))) {
+        const k = (r[1] === '+' ? '#' : r[1] === '-' ? 'b' : r[1]) + r[2];
+        if (!(k in ALT)) return null;
+        if (r[2] === '5') fifth = ALT[k]; else ext.add(ALT[k]);
+        continue;
+      }
+      if ((r = eat(/^(13|11|9|7|6|4|2)/))) { if (r[1] === '7') sev = sev || 10; else ext.add(ADD[r[1]]); continue; }
+      return null;
+    }
+    const ivs = new Set([0, fifth]);
+    if (!power) ivs.add(sus != null ? sus : third);
+    if (sev != null) ivs.add(sev);
+    ext.forEach((x) => ivs.add(x));
+    const root = pcOf(m[1], m[2]);
+    const bass = m[4] ? pcOf(m[4], m[5]) : null;
+    return { name: t, root, bass: bass === root ? null : bass, ivs: [...ivs].sort((a, b) => a - b), minor: third === 3 && sus == null };
+  }
+
+  /* ================================================================== */
+  /* 2. Notes → forme de la fiche                                        */
+  /* ================================================================== */
+  const semis = (iv) => M.mod(M.parseInterval(iv).semis, 12);
+  let SHAPES = null;
+  function shapes() {
+    if (!SHAPES) {
+      SHAPES = [];
+      ShapeBank.ALL.forEach((fam) => fam.shapes.forEach((sh) => {
+        SHAPES.push(Object.assign({}, sh, { set: [...new Set(sh.formula.split(' ').map(semis))].sort((a, b) => a - b) }));
+      }));
+    }
+    return SHAPES;
+  }
+
+  /**
+   * Formes de la fiche pour cet accord, la meilleure d'abord.
+   * Même notes → forme exacte. Sinon la forme la plus proche qui ne joue aucune note étrangère
+   * (on peut perdre la quinte, ou une extension), sinon la forme majeure / mineure.
+   */
+  function shapesFor(ch) {
+    const want = new Set(ch.ivs);
+    const key = ch.ivs.join(',');
+    if (key === '0,7') return powerChord(ch);
+    // notes qu'on peut laisser de côté : la quinte, et les extensions « en dessous » de la plus haute
+    const omissible = new Set([7]);
+    if (want.has(9) && want.has(10)) { omissible.add(2); omissible.add(5); }
+    if (want.has(5) && want.has(10)) omissible.add(2);
+    let best = [], bestScore = Infinity;
+    shapes().forEach((sh) => {
+      if (sh.set.some((x) => !want.has(x))) return;
+      let score = sh.set.join(',') === key ? 0 : 0.5;
+      want.forEach((x) => { if (sh.set.indexOf(x) < 0) score += omissible.has(x) ? 0.3 : (x === 3 || x === 4) ? 10 : 1; });
+      if (score < bestScore - 1e-9) { bestScore = score; best = [sh]; } else if (Math.abs(score - bestScore) < 1e-9 && best[0].name === sh.name) best.push(sh);
+    });
+    let simplified = bestScore >= 1;
+    if (!best.length || bestScore >= 10) {
+      const name = ch.minor ? 'Mineur (m)' : 'Majeur';
+      best = shapes().filter((sh) => sh.name === name);
+      simplified = true;
+    }
+    return best.map((sh) => place(sh, ch)).sort((a, b) => a.start - b.start).map((p) => Object.assign(p, { simplified }));
+  }
+
+  /** Accord de puissance (C5) : fondamentale + quinte, pris dans la forme majeure. */
+  function powerChord(ch) {
+    return shapes().filter((sh) => sh.name === 'Majeur').map((sh) => {
+      let kept = 0;
+      const strings = sh.strings.map((x) => (x && kept < 3 && [0, 7].indexOf(semis(x.iv)) >= 0 && !x.optional ? (kept++, x) : null));
+      return place(Object.assign({}, sh, { name: '5 (puissance)', strings }), ch);
+    }).sort((a, b) => a.start - b.start).map((p) => Object.assign(p, { simplified: false }));
+  }
+
+  /** Pose une forme sur la case de la fondamentale. */
+  function place(sh, ch) {
+    const rs = sh.rootString === 6 ? 0 : 1;
+    const os = sh.strings.filter(Boolean).map((x) => x.o);
+    let rf = M.mod(ch.root - TUNING[rs], 12);
+    if (rf + Math.min(...os) < 0) rf += 12;
+    const frets = sh.strings.map((x) => (x ? rf + x.o : null));
+    const played = frets.filter((f) => f != null);
+    return { shape: sh, rootFret: rf, frets, start: Math.min(...played) };
+  }
+
+  /* ================================================================== */
+  /* Dessin (même style que la banque de formes)                         */
+  /* ================================================================== */
+  function diagram(p) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 80 86');
+    svg.setAttribute('class', 'sc-svg');
+    const mk = (n, a, t) => { const e = document.createElementNS(ns, n); for (const k in a) e.setAttribute(k, a[k]); if (t != null) e.textContent = t; svg.appendChild(e); return e; };
+    const sh = p.shape;
+    const played = p.frets.filter((f) => f != null && f > 0);
+    const first = played.length ? Math.max(1, Math.min(...played)) : 1;
+    const base = Math.max(...played.concat([1])) <= 5 ? 1 : first;
+    const left = 18, right = 68, top = 16, fh = 13, nf = 5;
+    const sx = (s) => left + s * (right - left) / 5;
+    const cy = (f) => top + (f - base) * fh + fh / 2;
+    for (let s = 0; s < 6; s++) mk('line', { x1: sx(s), y1: top, x2: sx(s), y2: top + nf * fh, class: 'sh-line' });
+    for (let f = 0; f <= nf; f++) mk('line', { x1: left, y1: top + f * fh, x2: right, y2: top + f * fh, class: 'sh-line', 'stroke-width': f === 0 && base === 1 ? 3 : 0.7 });
+    if (base > 1) mk('text', { x: left - 4, y: top + fh * 0.72, class: 'sc-fret', 'text-anchor': 'end' }, base + 'fr');
+    // barré : au moins 3 cordes sur la case la plus basse, dont la plus aiguë jouée
+    const minF = played.length ? Math.min(...played) : 0;
+    const atMin = p.frets.map((f, s) => (f === minF && f > 0 ? s : -1)).filter((s) => s >= 0);
+    const last = p.frets.reduce((a, f, s) => (f != null ? s : a), -1);
+    if (atMin.length >= 3 && atMin[atMin.length - 1] === last) {
+      const a = sx(atMin[0]), b = sx(last), y = top + (minF - base) * fh - 1;
+      mk('path', { d: `M ${a} ${y} Q ${(a + b) / 2} ${y - 9} ${b} ${y}`, class: 'sh-barre' });
+    }
+    sh.strings.forEach((x, s) => {
+      const f = p.frets[s];
+      if (!x) { mk('text', { x: sx(s), y: top - 4, class: 'sh-mute', 'text-anchor': 'middle' }, '×'); return; }
+      const y = f === 0 ? top - 6 : cy(f);
+      if (x.root) mk('circle', { cx: sx(s), cy: y, r: f === 0 ? 3.2 : 4.4, class: 'sh-root' });
+      else if (f === 0) mk('circle', { cx: sx(s), cy: y, r: 3, class: 'sh-open' });
+      else mk('circle', { cx: sx(s), cy: y, r: 4, class: 'sh-dot' });
+      if (x.optional) mk('circle', { cx: sx(s), cy: y, r: 6, class: 'sh-opt' });
+    });
+    return svg;
+  }
+
+  function play(p) {
+    const t = Audio2.now() + 0.05;
+    let k = 0;
+    p.shape.strings.forEach((x, s) => { if (x && !x.optional) Audio2.guitar(TUNING[s] + p.frets[s], t + k++ * 0.03, 2, 0.5); });
+  }
+
+  /* ================================================================== */
+  /* 3. Trouver les accords sur la photo                                 */
+  /* ================================================================== */
+  /** Corrige les confusions fréquentes de la lecture (8→B, 0→D, rn→m, H→#…). Retourne { text, sure } ou null. */
+  function readChord(raw) {
+    const t = normalize(raw).replace(/^[.,:;'"`|!]+|[.,:;'"`|!]+$/g, '');
+    if (!t || t.length > 16) return null;
+    if (parseChord(t)) return { text: t, sure: true };
+    const first = { 8: 'B', 6: 'G', 0: 'D', O: 'D', Q: 'G', c: 'C', a: 'A', d: 'D', e: 'E', f: 'F', g: 'G', b: 'B', '(': 'C', '[': 'C', '€': 'E' };
+    const fixes = [
+      (x) => x.replace(/^([A-G])\1/i, '$1'),
+      (x) => x.replace(/[oOcC)\]}]+$/, ''),
+      (x) => x.replace(/^([A-G])(H|ff|t)/, '$1#').replace(/H/g, '#'),
+      (x) => x.replace(/^([A-G])[iIl1]m/, '$1#m'),
+      (x) => x.replace(/[iIl1\\]([A-G][#b]?)$/, '/$1'),
+      (x) => x.replace(/rn/g, 'm'),
+      (x) => x.replace(/sus[dA]$/, 'sus4'),
+      (x) => x.replace(/\(([^)]*)$/, '($1)'),
+      (x) => x.replace(/I/g, '1').replace(/l/g, '1')
+    ];
+    for (const base of [t, (first[t[0]] || t[0]) + t.slice(1)]) {
+      const vs = [base];
+      fixes.forEach((f) => { vs.push(f(base)); fixes.forEach((g) => vs.push(g(f(base)))); });
+      for (const v of vs) if (parseChord(v)) return { text: v, sure: false };
+    }
+    return null;
+  }
+
+  function loadImage(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); res(img); };
+      img.onerror = () => rej(new Error('Image illisible (essaie en JPG ou PNG).'));
+      img.src = url;
+    });
+  }
+  function toCanvas(img, maxW, minW) {
+    let k = Math.min(1, maxW / img.naturalWidth);
+    if (minW && img.naturalWidth * k < minW) k = minW / img.naturalWidth;
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+  /**
+   * Angle de la photo (en degrés) : on cherche la rotation pour laquelle les lignes de texte et de portée
+   * sont le plus nettement horizontales (profil des lignes le plus « contrasté »).
+   */
+  function skewAngle(c) {
+    const k = Math.min(1, 700 / c.width);
+    const W = Math.round(c.width * k), H = Math.round(c.height * k);
+    const t = document.createElement('canvas'); t.width = W; t.height = H;
+    t.getContext('2d').drawImage(c, 0, 0, W, H);
+    const d = t.getContext('2d').getImageData(0, 0, W, H).data;
+    const pts = [];
+    for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) {
+      const i = (y * W + x) * 4;
+      if (Math.max(d[i], d[i + 1], d[i + 2]) < 110) pts.push(x - W / 2, y - H / 2);
+    }
+    if (pts.length < 200) return 0;
+    let best = 0, bestV = -1;
+    for (let a = -6; a <= 6.001; a += 0.2) {
+      const r = a * Math.PI / 180, sn = Math.sin(r), cs = Math.cos(r);
+      const bins = new Float64Array(H * 2 + 2);
+      for (let i = 0; i < pts.length; i += 2) bins[Math.round(pts[i + 1] * cs - pts[i] * sn + H)]++;
+      let v = 0; for (let i = 0; i < bins.length; i++) v += bins[i] * bins[i];
+      if (v > bestV) { bestV = v; best = a; }
+    }
+    return Math.abs(best) < 0.3 ? 0 : best;
+  }
+  function rotate(c, deg) {
+    if (!deg) return c;
+    const o = document.createElement('canvas'); o.width = c.width; o.height = c.height;
+    const ctx = o.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, o.width, o.height);
+    ctx.translate(o.width / 2, o.height / 2); ctx.rotate(-deg * Math.PI / 180); ctx.translate(-o.width / 2, -o.height / 2);
+    ctx.drawImage(c, 0, 0);
+    return o;
+  }
+
+  /** Niveaux de gris avec le canal le plus clair : le fluo, quelle que soit sa couleur, devient blanc ; l'encre reste noire. */
+  function gray(c) {
+    const o = document.createElement('canvas');
+    o.width = c.width; o.height = c.height;
+    const ctx = o.getContext('2d');
+    ctx.drawImage(c, 0, 0);
+    const im = ctx.getImageData(0, 0, o.width, o.height), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const v = Math.max(d[i], d[i + 1], d[i + 2]); d[i] = d[i + 1] = d[i + 2] = v; }
+    ctx.putImageData(im, 0, 0);
+    return o;
+  }
+
+  /** Zones surlignées au fluo (s'il y en a) : rectangles en coordonnées de c. */
+  function highlights(c) {
+    const W = c.width, H = c.height, d = c.getContext('2d').getImageData(0, 0, W, H).data;
+    const sat = (i) => { const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]); return { s: mx ? (mx - mn) / mx : 0, v: mx / 255 }; };
+    // couleur du papier (médiane) pour ne pas prendre un papier jaunâtre pour du fluo
+    const ss = [];
+    for (let i = 0; i < d.length; i += 4 * 41) { const x = sat(i); if (x.v > 0.55) ss.push(x.s); }
+    ss.sort((a, b) => a - b);
+    const smin = Math.max(0.16, Math.min(0.4, (ss[ss.length >> 1] || 0) + 0.13));
+    const hl = (i) => { const x = sat(i); return x.s > smin && x.v > 0.5; };
+    const cell = 3, gw = Math.ceil(W / cell), gh = Math.ceil(H / cell), grid = new Uint8Array(gw * gh);
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      let n = 0, tot = 0;
+      for (let y = gy * cell; y < Math.min(H, gy * cell + cell); y++) for (let x = gx * cell; x < Math.min(W, gx * cell + cell); x++) { tot++; if (hl((y * W + x) * 4)) n++; }
+      if (n / tot > 0.3) grid[gy * gw + gx] = 1;
+    }
+    const seen = new Uint8Array(gw * gh), boxes = [];
+    for (let i = 0; i < grid.length; i++) {
+      if (!grid[i] || seen[i]) continue;
+      let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, count = 0;
+      const st = [i]; seen[i] = 1;
+      while (st.length) {
+        const k = st.pop(), x = k % gw, y = (k - x) / gw;
+        count++; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+          const nk = ny * gw + nx;
+          if (grid[nk] && !seen[nk]) { seen[nk] = 1; st.push(nk); }
+        }
+      }
+      const b = { x: x0 * cell, y: y0 * cell, w: (x1 - x0 + 1) * cell, h: (y1 - y0 + 1) * cell };
+      if (count < 12 || b.w < 12 || b.h < 8 || b.h > H * 0.4 || b.w > W * 0.95) continue;
+      // un vrai surlignage est une zone pleine (pas les reflets colorés au bord des lettres)
+      let px = 0;
+      for (let y = b.y; y < Math.min(H, b.y + b.h); y++) for (let x = b.x; x < Math.min(W, b.x + b.w); x++) if (hl((y * W + x) * 4)) px++;
+      if (px / (b.w * b.h) >= 0.45) boxes.push(b);
+    }
+    return readingOrder(boxes);
+  }
+  function readingOrder(items) {
+    if (!items.length) return items;
+    const hs = items.map((b) => b.h).sort((a, b) => a - b);
+    const tol = hs[hs.length >> 1] * 0.6;
+    const rows = [];
+    items.slice().sort((a, b) => (a.y + a.h / 2) - (b.y + b.h / 2)).forEach((b) => {
+      const cy = b.y + b.h / 2;
+      const r = rows.find((x) => Math.abs(x.cy - cy) < tol);
+      if (r) { r.items.push(b); r.cy = (r.cy * (r.items.length - 1) + cy) / r.items.length; } else rows.push({ cy, items: [b] });
+    });
+    rows.sort((a, b) => a.cy - b.cy);
+    return rows.map((r) => r.items.sort((a, b) => a.x - b.x));
+  }
+
+  /** Découpe une zone, la binarise (seuil d'Otsu) et l'agrandit. */
+  function crop(c, b, target) {
+    const px = Math.max(3, Math.round(b.h * 0.15)), py = Math.max(3, Math.round(b.h * 0.1));
+    const x = Math.max(0, b.x - px), y = Math.max(0, b.y - py);
+    const w = Math.min(c.width - x, b.w + 2 * px), hh = Math.min(c.height - y, b.h + 2 * py);
+    const im = c.getContext('2d').getImageData(x, y, w, hh), d = im.data;
+    const hist = new Array(256).fill(0), lum = new Uint8Array(w * hh);
+    for (let i = 0; i < w * hh; i++) { lum[i] = Math.max(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]); hist[lum[i]]++; }
+    let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+    let sB = 0, wB = 0, best = 0, thr = 128;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t]; if (!wB) continue;
+      const wF = w * hh - wB; if (!wF) break;
+      sB += t * hist[t];
+      const between = wB * wF * Math.pow(sB / wB - (sum - sB) / wF, 2);
+      if (between > best) { best = between; thr = t; }
+    }
+    for (let i = 0; i < w * hh; i++) { const v = lum[i] < thr ? 0 : 255; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+    const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = hh; tmp.getContext('2d').putImageData(im, 0, 0);
+    const k = Math.max(1.5, Math.min(6, target / hh));
+    const out = document.createElement('canvas'); out.width = Math.round(w * k) + 40; out.height = Math.round(hh * k) + 40;
+    const o = out.getContext('2d'); o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height);
+    o.drawImage(tmp, 20, 20, w * k, hh * k);
+    return out;
+  }
+
+  let workerP = null;
+  function worker(onStep) {
+    if (!workerP) {
+      workerP = (async () => {
+        if (!window.Tesseract) {
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = TESS_URL; s.onload = res;
+            s.onerror = () => rej(new Error('Impossible de charger la lecture automatique : vérifie ta connexion internet.'));
+            document.head.appendChild(s);
+          });
+        }
+        return Tesseract.createWorker('eng', 1, { logger: (m) => { if (m.progress != null && /load|initial/i.test(m.status || '')) onStep('Préparation de la lecture… ' + Math.round(m.progress * 100) + ' %'); } });
+      })();
+      workerP.catch(() => { workerP = null; });
+    }
+    return workerP;
+  }
+  const WL = 'ABCDEFGabdegijlmnorsuMRSLéÉ0123456789#♯♭/()+-,°øΔ ';
+
+  /** Accords surlignés : on lit chaque zone, en plusieurs essais si besoin, et on garde la lecture la plus sûre. */
+  async function readHighlights(c, boxes, onStep) {
+    const w = await worker(onStep);
+    const out = [];
+    for (let i = 0; i < boxes.length; i++) {
+      onStep(`Lecture des accords surlignés : ${i + 1} / ${boxes.length}`);
+      let best = null;
+      for (const [target, psm, wl] of [[120, '7', WL], [70, '7', WL], [120, '6', WL], [120, '8', WL], [120, '7', '']]) {
+        await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: wl });
+        const { data } = await w.recognize(crop(c, boxes[i], target));
+        const txt = (data.text || '').replace(/\s*([,(])\s*/g, '$1').replace(/\s+\)/g, ')');
+        const found = txt.split(/\s+/).filter(Boolean).map(readChord).filter(Boolean);
+        const score = found.length ? found.filter((f) => f.sure).length / found.length + data.confidence / 100 : -1;
+        if (!best || score > best.score) best = { score, found, conf: data.confidence };
+        if (found.length && found.every((f) => f.sure) && data.confidence >= 70) break;
+      }
+      best.found.forEach((f) => out.push({ text: f.text, sure: f.sure && best.conf >= 60 }));
+    }
+    return out;
+  }
+
+  /** Pas de surlignage : on lit toute la page et on garde les lignes faites d'accords (pas les paroles). */
+  async function readPage(c, onStep) {
+    const w = await worker(onStep);
+    onStep('Recherche des accords sur toute la page…');
+    await w.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '' });
+    const { data } = await w.recognize(gray(c));
+    const words = (data.words || []).filter((x) => x.text.trim()).map((x) => ({ x: x.bbox.x0, y: x.bbox.y0, w: x.bbox.x1 - x.bbox.x0, h: x.bbox.y1 - x.bbox.y0, text: x.text, conf: x.confidence }));
+    const out = [];
+    if (window.__scDebug) readingOrder(words).forEach((row) => console.log('ROW', row.map((x) => x.text + '@' + Math.round(x.y) + ':' + Math.round(x.conf)).join(' ')));
+    const rows = readingOrder(words).filter((row) => {
+      // une ligne d'accords : au moins un accord sûr, et presque pas de vrais mots (paroles, titre…)
+      const sure = row.filter((x) => { const c = readChord(x.text); return c && c.sure && x.conf >= 50; }).length;
+      const prose = row.filter((x) => /^[a-zà-ÿ'’]{3,}$/i.test(x.text) && !parseChord(x.text)).length;
+      return sure >= 1 && prose <= row.length * 0.25;
+    });
+    // chaque ligne d'accords est relue seule (les accords d'une seule lettre se perdent dans la page entière)
+    const done = [];
+    for (let r = 0; r < rows.length; r++) {
+      onStep(`Lecture des lignes d'accords : ${r + 1} / ${rows.length}`);
+      const row = rows[r];
+      const hs = row.map((x) => x.h).sort((a, b) => a - b), hm = hs[hs.length >> 1];
+      const y0 = Math.min(...row.map((x) => x.y)), y1 = Math.max(...row.map((x) => x.y + x.h));
+      const band = { x: 0, y: Math.max(0, Math.round(y0 - hm * 0.2)), w: c.width, h: Math.round(y1 - y0 + hm * 0.4) };
+      if (done.some((b) => band.y < b.y + b.h * 0.6 && band.y + band.h * 0.6 > b.y)) continue;
+      done.push(band);
+      const fromPage = row.filter((x) => x.conf >= 50).map((x) => readChord(x.text)).filter(Boolean);
+      let best = { found: fromPage, score: fromPage.filter((f) => f.sure).length };
+      for (const psm of ['7', '6']) {
+        await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: WL });
+        const { data } = await w.recognize(crop(c, band, 110));
+        const txt = (data.text || '').replace(/\s*([,(])\s*/g, '$1').replace(/\s+\)/g, ')');
+        const toks = txt.split(/\s+/).filter(Boolean);
+        const found = toks.map(readChord).filter(Boolean);
+        // on refuse une relecture pleine de déchets (bouts de portée lus comme du texte)
+        if (found.length < toks.length * 0.7) continue;
+        const score = found.filter((f) => f.sure).length + (data.confidence >= 60 ? 0.5 : 0);
+        if (score > best.score) best = { found, score };
+      }
+      best.found.forEach((f) => out.push({ text: f.text, sure: f.sure }));
+    }
+    return out;
+  }
+
+  /* ================================================================== */
+  /* Page                                                                */
+  /* ================================================================== */
+  function render(el) {
+    let items = App.store('scoreChords', []);
+    const fileIn = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+    const pick = h('button', { class: 'btn primary', text: '📷 Choisir / prendre la photo de la partition' });
+    pick.addEventListener('click', () => fileIn.click());
+    const status = h('div');
+    const result = h('div');
+    el.appendChild(h('div', { class: 'panel' }, [
+      h('p', { class: 'hint', html: 'Prends la partition en photo, bien à plat et bien éclairée. Si tu surlignes des accords au fluo, je ne lis que ceux-là ; sinon je cherche les accords sur toute la page. <b>La 1re fois, l’outil de lecture se télécharge (~10 Mo).</b>' }),
+      h('div', { class: 'btn-row' }, [pick, fileIn]),
+      status
+    ]));
+    el.appendChild(result);
+
+    fileIn.addEventListener('change', async () => {
+      const f = fileIn.files[0];
+      fileIn.value = '';
+      if (!f) return;
+      status.innerHTML = '';
+      const msg = h('div', { class: 'feedback info', text: 'Ouverture de la photo…' });
+      status.appendChild(msg);
+      const step = (t) => { msg.textContent = t; };
+      try {
+        const img = await loadImage(f);
+        step('Redressement de la photo…');
+        const angle = skewAngle(toCanvas(img, 1200));
+        const small = rotate(toCanvas(img, 1200), angle);
+        const big = rotate(toCanvas(img, 3000, 1600), angle);
+        const k = big.width / small.width;
+        const boxes = highlights(small).flat().map((b) => ({ x: Math.round(b.x * k), y: Math.round(b.y * k), w: Math.round(b.w * k), h: Math.round(b.h * k) }));
+        let found = boxes.length ? await readHighlights(big, boxes, step) : [];
+        if (!found.length) found = await readPage(big, step);
+        items = found;
+        App.save('scoreChords', items);
+        status.innerHTML = '';
+        if (!items.length) status.appendChild(h('div', { class: 'notice warn', text: 'Je n’ai trouvé aucun accord sur cette photo. Essaie une photo plus nette et plus droite, ou écris les accords ci-dessous.' }));
+        draw();
+      } catch (e) {
+        status.innerHTML = '';
+        status.appendChild(h('div', { class: 'notice warn', text: 'Erreur : ' + e.message }));
+      }
+    });
+
+    function draw() {
+      result.innerHTML = '';
+      const panel = h('div', { class: 'panel' });
+      // liste des accords lus (correction possible)
+      panel.appendChild(h('h2', { style: 'margin-top:0', text: 'Accords trouvés' }));
+      const chips = h('div', { class: 'sc-chips' });
+      items.forEach((it, i) => {
+        const chip = h('span', { class: 'sc-chip' + (it.sure ? '' : ' unsure') });
+        const b = h('button', { class: 'sc-name', text: it.text, title: 'Corriger' });
+        b.addEventListener('click', () => {
+          const v = prompt('Corriger l’accord (vide = supprimer) :', it.text);
+          if (v === null) return;
+          if (!v.trim()) items.splice(i, 1);
+          else if (parseChord(v)) { it.text = normalize(v); it.sure = true; } else { alert('« ' + v + ' » n’est pas un accord reconnu.'); return; }
+          App.save('scoreChords', items); draw();
+        });
+        const x = h('button', { class: 'sc-x', text: '✕', title: 'Supprimer' });
+        x.addEventListener('click', () => { items.splice(i, 1); App.save('scoreChords', items); draw(); });
+        chip.appendChild(b); chip.appendChild(x);
+        chips.appendChild(chip);
+      });
+      if (!items.length) chips.appendChild(h('span', { class: 'muted', text: 'Aucun accord pour l’instant.' }));
+      panel.appendChild(chips);
+      if (items.some((x) => !x.sure)) panel.appendChild(h('p', { class: 'hint', text: 'En orange : lecture incertaine, vérifie (touche pour corriger).' }));
+      const add = h('input', { type: 'text', placeholder: 'Ajouter des accords : ex. C G Am F' });
+      const addBtn = h('button', { class: 'btn small', text: '+ Ajouter' });
+      const doAdd = () => {
+        const bad = [];
+        add.value.split(/[\s;|]+/).filter(Boolean).forEach((t) => { if (parseChord(t)) items.push({ text: normalize(t), sure: true }); else bad.push(t); });
+        add.value = bad.join(' ');
+        App.save('scoreChords', items); draw();
+        if (bad.length) alert('Non reconnu : ' + bad.join(', '));
+      };
+      addBtn.addEventListener('click', doAdd);
+      add.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
+      panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn]));
+      result.appendChild(panel);
+
+      // les accords sur la guitare (chacun une seule fois, dans l'ordre d'apparition)
+      const names = [];
+      items.forEach((x) => { if (names.indexOf(x.text) < 0) names.push(x.text); });
+      if (!names.length) return;
+      const gp = h('div', { class: 'panel' });
+      gp.appendChild(h('h2', { style: 'margin-top:0', text: '🎸 Sur la guitare' }));
+      gp.appendChild(h('p', { class: 'hint', text: 'Formes de la fiche d’accords. Rond orange = fondamentale, × = corde étouffée, pointillés = note facultative, « 5fr » = la forme commence à la 5e case. Touche un accord pour l’entendre, ↻ pour l’autre forme.' }));
+      const grid = h('div', { class: 'sc-grid' });
+      const choice = App.store('scoreShape', {});
+      names.forEach((n) => {
+        const ch = parseChord(n);
+        const opts = ch ? shapesFor(ch) : [];
+        const card = h('div', { class: 'sc-card' });
+        card.appendChild(h('div', { class: 'sc-title', text: n }));
+        if (!opts.length) { card.appendChild(h('div', { class: 'muted', text: '?' })); grid.appendChild(card); return; }
+        const p = opts[(choice[n] || 0) % opts.length];
+        const btn = h('button', { class: 'sc-btn', title: 'Écouter' }, [diagram(p)]);
+        btn.addEventListener('click', () => play(p));
+        card.appendChild(btn);
+        const label = 'forme « ' + p.shape.name + ' »' + (p.simplified ? ' (simplifié)' : '');
+        card.appendChild(h('div', { class: 'sc-info', text: label }));
+        if (ch.bass != null) card.appendChild(h('div', { class: 'sc-info', text: 'basse : ' + n.split('/')[1] }));
+        if (opts.length > 1) {
+          const alt = h('button', { class: 'sc-alt', text: '↻ autre forme' });
+          alt.addEventListener('click', () => { choice[n] = ((choice[n] || 0) + 1) % opts.length; App.save('scoreShape', choice); draw(); });
+          card.appendChild(alt);
+        }
+        grid.appendChild(card);
+      });
+      gp.appendChild(grid);
+      result.appendChild(gp);
+    }
+    draw();
+  }
+
+  App.register('/guitare/partition', {
+    title: 'Partition → accords',
+    subtitle: 'Envoie une photo de ta partition : je trouve les accords et je te les montre sur la guitare, avec les formes de ta fiche d’accords.',
+    render
+  });
+
+  window.ScoreChords = { parseChord, shapesFor, readChord };
+})();
