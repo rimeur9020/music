@@ -12,35 +12,41 @@
   /* ------------------------------------------------------------------ */
   /* Noms d'accords                                                      */
   /* ------------------------------------------------------------------ */
-  const ROOT = '(?:[A-G]|Do|Ré|Re|Mi|Fa|Sol|La|Si)';
-  const CHORD_RE = new RegExp('^(' + ROOT + ')([#b♯♭]?)((?:maj|min|dim|aug|sus|add|alt|m|M|°|ø|Δ|\\+|-|\\(|\\)|#|b|♯|♭|[0-9])*)(?:/(' + ROOT + ')([#b♯♭]?))?$');
+  /** Nom d'accord propre, ou null si ce n'est pas un accord (toutes les notations de la fiche : -7, +7, 7(b9,#5)…). */
   function cleanChord(t) {
-    const m = CHORD_RE.exec(t);
-    if (!m) return null;
-    const fix = (r) => (r === 'Re' ? 'Ré' : r);
-    let s = fix(m[1]) + (m[2] || '').replace('♯', '#').replace('♭', 'b') + (m[3] || '').replace(/♯/g, '#').replace(/♭/g, 'b');
-    if (m[4]) s += '/' + fix(m[4]) + (m[5] || '').replace('♯', '#').replace('♭', 'b');
-    // suffixe raisonnable : pas plus de 8 caractères, pas de chiffres absurdes
-    if ((m[3] || '').length > 8 || /\d{3}/.test(m[3] || '')) return null;
-    return s;
+    const sym = ChordSym.parse(t);
+    if (!sym) return null;
+    if (sym.name.length > 16) return null;
+    return sym.name;
   }
   /** Corrige les confusions fréquentes de la lecture automatique. */
   function fixOcr(raw) {
-    let t = raw.trim().replace(/[|!]/g, '').replace(/^[.,:;'"`]+|[.,:;'"`]+$/g, '').replace(/\s+/g, '');
+    let t = ChordSym.normalize(raw).replace(/[|!]/g, '').replace(/^[.,:;'"`]+|[.,:;'"`]+$/g, '');
     if (!t) return null;
     const direct = cleanChord(t);
     if (direct) return { text: direct, sure: true };
-    const first = { 8: 'B', 6: 'G', 0: 'D', O: 'D', Q: 'G', c: 'C', a: 'A', d: 'D', e: 'E', f: 'F', g: 'G', b: 'B', '€': 'E', '(': 'C' };
-    const variants = [
-      t.replace(/^([A-G])\1/i, '$1'),
-      t.replace(/[iIl1|\\]([A-G][#b]?)$/, '/$1'),
-      t.replace(/rn/g, 'm'),
-      (first[t[0]] || t[0]) + t.slice(1),
-      ((first[t[0]] || t[0]) + t.slice(1)).replace(/rn/g, 'm'),
-      t.replace(/^([A-G])H/, '$1#').replace(/^([A-G])ff/, '$1#'),
-      t.replace(/([A-G])\s*S(us)/, '$1s$2'),
-      t.replace(/I/g, '1').replace(/l/g, '1')
+    const first = { 8: 'B', 6: 'G', 0: 'D', O: 'D', Q: 'G', c: 'C', a: 'A', d: 'D', e: 'E', f: 'F', g: 'G', b: 'B', '€': 'E', '(': 'C', '[': 'C', '{': 'C' };
+    const fixes = [
+      (x) => x.replace(/^([A-G])\1/i, '$1'),
+      (x) => x.replace(/[)}\]]+$/, ''),
+      (x) => x.replace(/\(([^)]*)$/, '($1)'),
+      (x) => x.replace(/[oOcC}\]]+$/, ''),
+      (x) => x.replace(/^([A-G])(H|ff|tt|t)/, '$1#').replace(/H/g, '#'),
+      (x) => x.replace(/^([A-G])[iIl1t]m/, '$1#m'),
+      (x) => x.replace(/^([A-G][#b]?)(?:—|_|~)/, '$1-'),
+      (x) => x.replace(/[iIl1|\\]([A-G][#b]?)$/, '/$1'),
+      (x) => x.replace(/rn/g, 'm'),
+      (x) => x.replace(/sus[dA]$/, 'sus4').replace(/sus[zZ]$/, 'sus2'),
+      (x) => x.replace(/([A-G])\s*S(us)/, '$1s$2'),
+      (x) => x.replace(/I/g, '1').replace(/l/g, '1')
     ];
+    // on essaie chaque correction, sur le texte lu et sur le texte avec la 1re lettre corrigée
+    const variants = [];
+    [t, (first[t[0]] || t[0]) + t.slice(1)].forEach((base) => {
+      variants.push(base);
+      fixes.forEach((f) => variants.push(f(base)));
+      fixes.forEach((f) => fixes.forEach((g) => { if (f !== g) variants.push(g(f(base))); }));
+    });
     for (const v of variants) { const c = cleanChord(v); if (c) return { text: c, sure: false }; }
     return null;
   }
@@ -66,15 +72,39 @@
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     return c;
   }
+  /** Image en pleine résolution (max 4000 px) pour lire les petits accords. */
+  function fullCanvas(img, work) {
+    const scale = Math.min(1, 4000 / img.naturalWidth);
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * scale);
+    c.height = Math.round(img.naturalHeight * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return { canvas: c, k: c.width / work.width };
+  }
+  let satMin = 0.28;
   function isHighlight(r, g, b) {
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     const v = max / 255, s = max ? (max - min) / max : 0;
-    return s > 0.28 && v > 0.55;
+    return s > satMin && v > 0.5;
+  }
+  /** Seuil de couleur adapté au papier : un papier jaunâtre ou une lumière chaude ne doivent pas compter comme du fluo. */
+  function tuneThreshold(data) {
+    const sats = [];
+    for (let i = 0; i < data.length; i += 4 * 37) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      if (max > 140) sats.push(max ? (max - min) / max : 0);
+    }
+    sats.sort((a, b) => a - b);
+    const paper = sats.length ? sats[Math.floor(sats.length * 0.5)] : 0;
+    // les fluos pâles (rose, bleu clair) sont peu saturés : seuil bas, mais au-dessus du papier
+    satMin = Math.max(0.16, Math.min(0.4, paper + 0.13));
   }
   /** Rectangles des zones surlignées (fluo jaune, vert, rose, orange, bleu…). */
   function findHighlights(c) {
     const W = c.width, H = c.height;
     const data = c.getContext('2d').getImageData(0, 0, W, H).data;
+    tuneThreshold(data);
     const cell = 3; // on travaille sur une grille de 3 px pour aller vite
     const gw = Math.ceil(W / cell), gh = Math.ceil(H / cell);
     const grid = new Uint8Array(gw * gh);
@@ -145,12 +175,15 @@
     return [].concat(...rows.map((r) => r.items.sort((a, b) => a.x - b.x)));
   }
   /** Découpe une zone, enlève la couleur du surligneur, agrandit : texte noir sur blanc. */
-  function cropForOcr(c, b) {
-    const pad = 3;
-    const x = Math.max(0, b.x - pad), y = Math.max(0, b.y - pad);
-    const w = Math.min(c.width - x, b.w + pad * 2), hh = Math.min(c.height - y, b.h + pad * 2);
+  function cropForOcr(c, b0, k, target) {
+    // on découpe dans l'image en pleine résolution (k = rapport avec l'image de travail)
+    k = k || 1;
+    const b = { x: b0.x * k, y: b0.y * k, w: b0.w * k, h: b0.h * k };
+    const padX = Math.max(3, Math.round(b.h * 0.15)), padY = Math.max(3, Math.round(b.h * 0.1));
+    const x = Math.max(0, Math.round(b.x - padX)), y = Math.max(0, Math.round(b.y - padY));
+    const w = Math.min(c.width - x, Math.round(b.w + padX * 2)), hh = Math.min(c.height - y, Math.round(b.h + padY * 2));
     const src = c.getContext('2d').getImageData(x, y, w, hh);
-    const scale = Math.max(2, Math.min(5, Math.round(60 / hh)));
+    const scale = Math.max(1.5, Math.min(6, (target || 120) / hh));
     const out = document.createElement('canvas');
     out.width = w * scale; out.height = hh * scale;
     const tmp = document.createElement('canvas');
@@ -215,17 +248,41 @@
   }
 
   /** Lit chaque zone surlignée. Retourne [{ text, sure, box }]. */
-  async function readBoxes(c, boxes, onProgress) {
+  async function readBoxes(c, boxes, onProgress, full) {
     const w = await getWorker(onProgress);
-    await w.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: 'ABCDEFGabdegijlmnorsuMRSLéÉ0123456789#♯♭/()+-°øΔ ' });
+    const WL = 'ABCDEFGabdegijlmnorsuMRSLéÉ0123456789#♯♭/()+-,°øΔ ';
     const out = [];
-    for (let i = 0; i < boxes.length; i++) {
+    let i = 0;
+    const pass = async (img, psm, wl) => {
+      await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: wl });
+      const { data } = await w.recognize(img);
+      // « 7(b9, #5) » : on recolle ce que la lecture a séparé autour des parenthèses et virgules
+      const txt = (data.text || '').replace(/\s*([,(])\s*/g, '$1').replace(/\s+\)/g, ')');
+      if (window.__scanDebug) console.log('OCR', i, psm, wl ? 'wl' : 'free', JSON.stringify(data.text), Math.round(data.confidence));
+      return { data, txt, found: txt.split(/\s+/).filter(Boolean).map(fixOcr).filter(Boolean) };
+    };
+    for (i = 0; i < boxes.length; i++) {
       if (onProgress) onProgress(`Lecture des accords ${i + 1} / ${boxes.length}…`);
-      const { data } = await w.recognize(cropForOcr(c, boxes[i]));
-      const tokens = (data.text || '').split(/\s+/).filter(Boolean);
-      const found = tokens.map(fixOcr).filter(Boolean);
+      // deux agrandissements : gros (lettres seules) et moyen (noms longs)
+      const crop = (target) => (full ? cropForOcr(full.canvas, boxes[i], full.k, target) : cropForOcr(c, boxes[i], 1, target));
+      const img = crop(120);
+      let img2 = null;
+      // plusieurs essais si la première lecture échoue ou hésite
+      // on garde la lecture la plus sûre (accords reconnus + confiance de la lecture)
+      const score = (x) => (x.found.length ? x.found.filter((f) => f.sure).length / x.found.length + x.data.confidence / 100 : -1);
+      let r = await pass(img, '7', WL);
+      const ok = (x) => x.found.length && x.found.every((f) => f.sure) && x.data.confidence >= 70;
+      if (!ok(r)) {
+        for (const [psm, wl, alt] of [['7', WL, true], ['6', WL], ['6', WL, true], ['8', WL], ['7', '']]) {
+          if (alt && !img2) img2 = crop(70);
+          const r2 = await pass(alt ? img2 : img, psm, wl);
+          if (score(r2) > score(r)) r = r2;
+          if (ok(r)) break;
+        }
+      }
+      const { data, found } = r;
       if (found.length) found.forEach((f, k) => out.push({ text: f.text, sure: f.sure && data.confidence > 60, box: boxes[i], part: k, of: found.length }));
-      else if ((data.text || '').trim()) out.push({ text: (data.text || '').trim().slice(0, 10), sure: false, invalid: true, box: boxes[i] });
+      else out.push({ text: (data.text || '').trim().slice(0, 10) || '?', sure: false, invalid: true, box: boxes[i] });
     }
     return out;
   }
@@ -330,7 +387,7 @@
   /* Page                                                                */
   /* ------------------------------------------------------------------ */
   function render(el) {
-    const st = { imgUrl: null, canvas: null, items: App.store('scanChords', []), mode: App.store('scanMode', 'highlight') };
+    const st = { imgUrl: null, canvas: null, items: App.store('scanChords', []), mode: App.store('scanMode', 'highlight'), alt: App.store('scanAlt', {}) };
     const fileIn = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
     const camIn = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none' });
     const pick = h('button', { class: 'btn primary', text: '🖼️ Choisir une image' });
@@ -347,6 +404,7 @@
     const imgBox = h('div', { class: 'scan-view' });
     const editBox = h('div');
     const partsBox = h('div');
+    const guitarBox = h('div');
     el.appendChild(h('div', { class: 'panel' }, [
       h('h2', { style: 'margin-top:0', text: '1. La partition' }),
       h('p', { class: 'hint', html: 'Surligne les accords au fluo (jaune, vert, rose…) puis prends la partition en photo, bien à plat et bien éclairée. Sans surlignage, choisis « Tous les accords de la page » : le site garde les lignes qui ne contiennent que des accords. <b>La première lecture télécharge l’outil de lecture (~10 Mo), ensuite c’est plus rapide.</b>' }),
@@ -357,6 +415,7 @@
     el.appendChild(imgBox);
     el.appendChild(editBox);
     el.appendChild(partsBox);
+    el.appendChild(guitarBox);
 
     const onFile = async (f) => {
       if (!f) return;
@@ -368,6 +427,7 @@
         if (st.imgUrl) URL.revokeObjectURL(st.imgUrl);
         st.imgUrl = url;
         st.canvas = workCanvas(img);
+        st.full = fullCanvas(img, st.canvas);
         let items;
         if (st.mode === 'highlight') {
           prog.textContent = 'Recherche des zones surlignées…';
@@ -380,7 +440,7 @@
             return;
           }
           prog.textContent = boxes.length + ' zones surlignées trouvées. Lecture…';
-          items = await readBoxes(st.canvas, boxes, (t) => { prog.textContent = t; });
+          items = await readBoxes(st.canvas, boxes, (t) => { prog.textContent = t; }, st.full);
         } else {
           items = await readWholePage(st.canvas, (t) => { prog.textContent = t; });
         }
@@ -450,7 +510,7 @@
         if (valid) chip.appendChild(h('small', { text: String(num) }));
         const b = h('button', { class: 'scan-name', text: it.text });
         b.addEventListener('click', () => {
-          const v = prompt('Accord (ex. Am, F#m7, G/B, Do, Lam) — laisser vide pour supprimer :', it.text);
+          const v = prompt('Accord (ex. Am, F#m7, -7, 7(b9,#5), G/B, Lam) — laisser vide pour supprimer :', it.text);
           if (v === null) return;
           if (!v.trim()) st.items.splice(i, 1);
           else { const c = cleanChord(v.trim().replace(/\s+/g, '')); if (!c) { alert('« ' + v + ' » n’est pas un nom d’accord reconnu.'); return; } it.text = c; it.sure = true; it.invalid = false; }
@@ -463,10 +523,10 @@
       });
       if (!st.items.length) list.appendChild(h('span', { class: 'muted', text: 'Aucun accord pour l’instant.' }));
       panel.appendChild(list);
-      const add = h('input', { type: 'text', placeholder: 'Ajouter des accords à la fin : ex. C G Am F' });
+      const add = h('input', { type: 'text', placeholder: 'Ajouter des accords à la fin : ex. C G Am F  ou  D-7 G7(b9) Cmaj7' });
       const addBtn = h('button', { class: 'btn small', text: '+ Ajouter' });
       const doAdd = () => {
-        const toks = add.value.split(/[\s,;|–-]+/).filter(Boolean);
+        const toks = add.value.split(/[\s;|]+/).filter(Boolean);
         const bad = [];
         toks.forEach((t) => { const c = cleanChord(t); if (c) st.items.push({ text: c, sure: true }); else bad.push(t); });
         add.value = bad.join(' ');
@@ -501,7 +561,7 @@
           h('b', { text: p.occ.length > 1 ? `joué ${p.occ.length} fois` : 'joué 1 fois' }),
           h('span', { class: 'muted', text: ' · ' + p.chords.length + ' accord' + (p.chords.length > 1 ? 's' : '') })
         ]));
-        card.appendChild(h('div', { class: 'loop-chords' }, p.chords.map((c) => h('span', { class: 'loop-chord', text: c }))));
+        card.appendChild(h('div', { class: 'loop-chords' }, p.chords.map((c) => chordCard(c, true))));
         const play = h('button', { class: 'btn small', text: '▶ Écouter' });
         play.addEventListener('click', () => playChords(p.chords));
         card.appendChild(play);
@@ -526,14 +586,51 @@
       return { parts, seq };
     }
 
+    /** Doigté choisi pour un accord (le plus simple, ou celui choisi avec « autre doigté »). */
+    function voicingOf(name) {
+      const vs = ChordSym.voicings(ChordSym.parse(name));
+      if (!vs.length) return null;
+      return vs[(st.alt[name] || 0) % vs.length];
+    }
+    function strum(v, t) {
+      v.midis.forEach((m, k) => { if (m != null) Audio2.guitar(m, t + k * 0.025, 1.4, 0.5); });
+    }
     function playChords(names) {
       const t0 = Audio2.now() + 0.1;
-      names.forEach((n, i) => {
-        const ch = parseForSound(n);
-        if (!ch) return;
-        const v = Chords.voicing(ch);
-        v.midis.forEach((m, k) => { if (m != null) Audio2.guitar(m, t0 + i * 1.2 + k * 0.025, 1.4, 0.5); });
-      });
+      names.forEach((n, i) => { const v = voicingOf(n); if (v) strum(v, t0 + i * 1.2); });
+    }
+    /** Carte d'un accord : diagramme sur le manche, clic = écouter, ↻ = autre doigté. */
+    function chordCard(name, small) {
+      const card = h('div', { class: 'gchord' + (small ? ' small' : '') });
+      const draw = () => {
+        card.innerHTML = '';
+        const vs = ChordSym.voicings(ChordSym.parse(name));
+        const v = voicingOf(name);
+        if (!v) { card.appendChild(h('div', { class: 'gchord-name', text: name })); card.appendChild(h('div', { class: 'muted', text: '?' })); return; }
+        const btn = h('button', { class: 'gchord-btn', title: 'Écouter ' + name });
+        btn.appendChild(ChordSym.diagram(name, v));
+        btn.addEventListener('click', () => strum(v, Audio2.now() + 0.05));
+        card.appendChild(btn);
+        if (!small) card.appendChild(h('div', { class: 'gchord-label', text: v.label }));
+        if (vs.length > 1) {
+          const nx = h('button', { class: 'gchord-alt', text: small ? '↻' : '↻ autre doigté', title: 'Autre doigté' });
+          nx.addEventListener('click', () => { st.alt[name] = ((st.alt[name] || 0) + 1) % vs.length; App.save('scanAlt', st.alt); drawAll(); });
+          card.appendChild(nx);
+        }
+      };
+      draw();
+      return card;
+    }
+    function drawGuitar() {
+      guitarBox.innerHTML = '';
+      const names = [];
+      validItems().forEach((x) => { if (names.indexOf(x.text) < 0) names.push(x.text); });
+      if (!names.length) return;
+      const panel = h('div', { class: 'panel' });
+      panel.appendChild(h('h2', { style: 'margin-top:0', text: '🎸 Les accords du morceau sur la guitare' }));
+      panel.appendChild(h('p', { class: 'hint', text: 'Le rond orange = la fondamentale (comme sur la fiche). Touche un diagramme pour l’entendre, ↻ pour un autre doigté. « 5fr » = la forme commence à la 5e case.' }));
+      panel.appendChild(h('div', { class: 'gchord-grid' }, names.map((n) => chordCard(n, false))));
+      guitarBox.appendChild(panel);
     }
 
     async function exportPdf(parts, seq) {
@@ -541,7 +638,20 @@
       const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
       const ascii = (t) => t.replace(/é/g, 'e');
       let y = 20;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('Grille d’accords', 15, y); y += 12;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('Grille d’accords', 15, y); y += 8;
+      // diagrammes de tous les accords du morceau
+      const names = [];
+      parts.forEach((p) => p.chords.forEach((c) => { if (names.indexOf(c) < 0) names.push(c); }));
+      const dw = 22, dh = 28, perRow = 8;
+      names.forEach((n, i) => {
+        const v = voicingOf(n);
+        if (!v) return;
+        const col = i % perRow;
+        if (col === 0 && i > 0) y += dh + 2;
+        if (y + dh > 285) { doc.addPage(); y = 20; }
+        pdfDiagram(doc, Chords.diagramPrims(ascii(n), v), 15 + col * (dw + 1.5), y, dw / 64);
+      });
+      if (names.length) y += dh + 8;
       parts.forEach((p) => {
         if (y > 260) { doc.addPage(); y = 20; }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
@@ -557,31 +667,27 @@
       doc.splitTextToSize(structureText(seq).replace(/–/g, '-').replace(/×/g, 'x'), 180).forEach((l) => { doc.text(l, 15, y); y += 7; });
       doc.save('grille-accords.pdf');
     }
+    function pdfDiagram(doc, prims, x0, y0, k) {
+      prims.forEach((p) => {
+        if (p.t === 'line') { doc.setLineWidth(p.w * k); doc.setDrawColor(0); doc.line(x0 + p.x1 * k, y0 + p.y1 * k, x0 + p.x2 * k, y0 + p.y2 * k); }
+        else if (p.t === 'text') {
+          doc.setFont('helvetica', p.bold ? 'bold' : 'normal'); doc.setFontSize(p.size * k * 2.83);
+          doc.setTextColor(p.light ? 255 : 0);
+          doc.text(String(p.s).replace('×', 'x'), x0 + p.x * k, y0 + p.y * k, { align: p.anchor === 'middle' ? 'center' : p.anchor === 'end' ? 'right' : 'left' });
+          doc.setTextColor(0);
+        } else if (p.t === 'circle') {
+          if (p.root) doc.setFillColor(217, 72, 15); else doc.setFillColor(0);
+          doc.setLineWidth(0.8 * k);
+          doc.circle(x0 + p.cx * k, y0 + p.cy * k, p.r * k, p.fill ? 'F' : 'S');
+        } else if (p.t === 'rect') {
+          doc.setFillColor(0);
+          doc.roundedRect(x0 + p.x * k, y0 + p.y * k, p.w * k, p.h * k, p.r * k, p.r * k, 'F');
+        }
+      });
+    }
 
-    function drawAll() { drawEditor(); drawParts(); }
+    function drawAll() { drawEditor(); drawParts(); drawGuitar(); }
     drawAll();
-  }
-
-  /** Accord lu → objet accord pour le son (racine + type simplifié). */
-  function parseForSound(t) {
-    const m = CHORD_RE.exec(t);
-    if (!m) return null;
-    const FR = { Do: 'C', 'Ré': 'D', Re: 'D', Mi: 'E', Fa: 'F', Sol: 'G', La: 'A', Si: 'B' };
-    const root = Music.parseNote((FR[m[1]] || m[1]) + (m[2] || '').replace('♯', '#').replace('♭', 'b'));
-    const suf = m[3] || '';
-    let type = 'maj';
-    if (/^(m7b5|ø)/.test(suf)) type = 'm7b5';
-    else if (/^(dim|°)/.test(suf)) type = /7/.test(suf) ? 'dim7' : 'dim';
-    else if (/^(maj|M|Δ)/.test(suf)) type = 'maj7';
-    else if (/^(m|min|-)/.test(suf)) type = /7/.test(suf) ? 'm7' : /6/.test(suf) ? 'm6' : 'min';
-    else if (/^sus2/.test(suf)) type = 'sus2';
-    else if (/^sus/.test(suf)) type = 'sus4';
-    else if (/^(aug|\+)/.test(suf)) type = 'aug';
-    else if (/^add/.test(suf)) type = 'add9';
-    else if (/^(7|9|11|13)/.test(suf)) type = /^9/.test(suf) ? '9' : '7';
-    else if (/^6/.test(suf)) type = '6';
-    else if (/^5/.test(suf)) type = '5';
-    return { root, type };
   }
 
   App.register('/guitare/accompagnement', {
