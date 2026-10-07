@@ -142,7 +142,8 @@
     const rs = sh.rootString === 6 ? 0 : 1;
     const os = sh.strings.filter(Boolean).map((x) => x.o);
     let rf = M.mod(ch.root - TUNING[rs], 12);
-    if (rf + Math.min(...os) < 0) rf += 12;
+    // jamais de corde à vide (pas d'accord ouvert, plus jazz) : la forme est toujours barrée / fermée
+    if (rf + Math.min(...os) < 1) rf += 12;
     const frets = sh.strings.map((x) => (x ? rf + x.o : null));
     const played = frets.filter((f) => f != null);
     return { shape: sh, rootFret: rf, frets, start: Math.min(...played) };
@@ -540,7 +541,7 @@
       if (!names.length) return;
       const gp = h('div', { class: 'panel' });
       gp.appendChild(h('h2', { style: 'margin-top:0', text: '🎸 Sur la guitare' }));
-      gp.appendChild(h('p', { class: 'hint', text: 'Formes de la fiche d’accords. Rond orange = fondamentale, × = corde étouffée, pointillés = note facultative, « 5fr » = la forme commence à la 5e case. Touche un accord pour l’entendre, ↻ pour l’autre forme.' }));
+      gp.appendChild(h('p', { class: 'hint', text: 'Formes fermées de la fiche d’accords (jamais de cordes à vide, pour un son jazz). Rond orange = fondamentale, × = corde étouffée, pointillés = note facultative, « 5fr » = la forme commence à la 5e case. Touche un accord pour l’entendre, ↻ pour l’autre forme.' }));
       const grid = h('div', { class: 'sc-grid' });
       const choice = App.store('scoreShape', {});
       names.forEach((n) => {
