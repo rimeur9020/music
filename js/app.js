@@ -58,7 +58,7 @@
   function renderHome(el) {
     el.appendChild(h('section', { class: 'hero' }, [
       h('h1', { text: 'Ton atelier de musique' }),
-      h('p', { class: 'lead', text: 'Entraîne ton oreille et ta lecture, révise tes gammes, et transforme une partition en fiche d’accompagnement guitare prête à imprimer.' })
+      h('p', { class: 'lead', text: 'Entraîne ton oreille et ta lecture, révise tes gammes, et relève les accords d’une partition avec ses parties qui se répètent.' })
     ]));
     const card = (href, icon, title, text) => h('a', { class: 'card link-card', href }, [
       h('div', { class: 'card-icon', text: icon }), h('h3', { text: title }), h('p', { text: text })
@@ -80,7 +80,7 @@
       card('#/guitare/guitaristes', '⭐', 'Guitaristes', 'La vie, le matériel et la technique des grands guitaristes.'),
       card('#/guitare/son', '🎛', 'Trouver le son', 'Ton matériel + le son d’une chanson ou d’un artiste = les réglages de guitare, pédales et ampli.'),
       card('#/guitare/backing', '🎶', 'Backing tracks', 'Cherche une backing track, démarre juste avant le solo, en boucle et à la vitesse voulue.'),
-      card('#/guitare/accompagnement', '📄', 'Partition → accompagnement', 'Importe ou scanne une partition : accords, rythmique selon le style, fiche PDF d’une page.')
+      card('#/guitare/accompagnement', '📄', 'Partition → accords', 'Envoie une photo avec les accords surlignés : je les lis, je trouve les boucles (A, B, C…) et où elles reviennent.')
     ]));
   }
 
