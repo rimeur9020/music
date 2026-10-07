@@ -448,3 +448,4 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .sc-num { color: var(--muted); font-size: .7rem; margin-right: 4px; }
 .sc-chip input.sc-edit { box-sizing: content-box; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; font: inherit; font-weight: 700; color: var(--text); padding: 2px 1px; margin: 0; min-width: 2.5ch; max-width: 14ch; box-shadow: none; outline: none; }
 .sc-chip input.sc-edit:focus { border-bottom-color: var(--guitar); }
+.sc-was { font-size: .68rem; color: var(--muted); margin-left: 2px; white-space: nowrap; }

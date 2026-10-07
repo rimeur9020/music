@@ -198,10 +198,27 @@
   /* 3. Trouver les accords sur la photo                                 */
   /* ================================================================== */
   /** Corrige les confusions fréquentes de la lecture (8→B, 0→D, rn→m, H→#…). Retourne { text, sure } ou null. */
+  /**
+   * Un nom d'accord « qui existe vraiment » : qualité, un chiffre principal, sus/add, altérations
+   * (entre parenthèses ou non), basse. Refuse les suites de chiffres absurdes comme « B74556 ».
+   */
+  const ALTER = '[b#+-]?(?:5|6|9|11|13)';
+  const PLAUSIBLE = new RegExp('^' + ROOTS + '[#b]?' +
+    '(?:maj|Maj|M|Δ|min|mi|m|-|dim|°|ø|aug|\\+)?' +
+    '(?:\\(?(?:maj|Maj|M|Δ)7?\\)?)?' +
+    '(?:6/9|69|13|11|9|7|6|5)?' +
+    '(?:sus[24]?|add(?:2|4|6|9|11|13))?' +
+    '(?:\\((?:' + ALTER + '|maj7|\\+7|sus[24]?|add(?:2|4|9))(?:,(?:' + ALTER + '))*\\)|[b#](?:5|9|11|13)|\\+7|\\+5|alt|sus[24]?)*' +
+    '(?:/' + ROOTS + '[#b]?)?$');
+  function plausible(t) {
+    t = normalize(t);
+    return PLAUSIBLE.test(t) && !!parseChord(t);
+  }
+
   function readChord(raw) {
     const t = normalize(raw).replace(/^[.,:;'"`|!]+|[.,:;'"`|!]+$/g, '');
     if (!t || t.length > 16) return null;
-    if (parseChord(t)) return { text: t, sure: true };
+    if (plausible(t)) return { text: t, sure: true };
     const first = { 8: 'B', 6: 'G', 0: 'D', O: 'D', Q: 'G', c: 'C', a: 'A', d: 'D', e: 'E', f: 'F', g: 'G', b: 'B', '(': 'C', '[': 'C', '€': 'E' };
     const fixes = [
       (x) => x.replace(/^([A-G])\1/i, '$1'),
@@ -214,12 +231,51 @@
       (x) => x.replace(/\(([^)]*)$/, '($1)'),
       (x) => x.replace(/I/g, '1').replace(/l/g, '1')
     ];
+    const vs = [];
     for (const base of [t, (first[t[0]] || t[0]) + t.slice(1)]) {
-      const vs = [base];
+      vs.push(base);
       fixes.forEach((f) => { vs.push(f(base)); fixes.forEach((g) => vs.push(g(f(base)))); });
-      for (const v of vs) if (parseChord(v)) return { text: v, sure: false };
     }
+    for (const v of vs) if (plausible(v)) return { text: v, sure: false };
+    // lisible mais bizarre (ex. « B74556 ») : on le garde pour le comparer aux autres accords du morceau
+    for (const v of vs) if (parseChord(v)) return { text: v, sure: false, weird: true };
     return null;
+  }
+
+  function lev(a, b) {
+    const d = [];
+    for (let i = 0; i <= a.length; i++) d[i] = [i];
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    return d[a.length][b.length];
+  }
+  const rootOf = (t) => { const m = NAME_RE.exec(normalize(t)); return m ? (FR[m[1]] || m[1]) + (m[2] || '') : ''; };
+
+  /**
+   * Accords bizarres : on cherche parmi les autres accords du morceau (surtout ceux qui reviennent)
+   * celui qui lui ressemble le plus, et on le recopie. Sinon on garde le début lisible (« B74556 » → « B7 »).
+   */
+  function fixWeird(list) {
+    const count = {};
+    list.forEach((it) => { if (plausible(it.text)) count[it.text] = (count[it.text] || 0) + 1; });
+    const pool = Object.keys(count);
+    return list.map((it) => {
+      if (plausible(it.text)) return it;
+      const w = normalize(it.text), root = rootOf(w);
+      let best = null;
+      pool.forEach((c) => {
+        let pre = 0; while (pre < c.length && pre < w.length && c[pre] === w[pre]) pre++;
+        const same = rootOf(c) === root;
+        const score = pre * 2 - lev(w, c) + Math.log2(count[c]) + (same ? 3 : -3);
+        if (!best || score > best.score) best = { c, score, same, pre, d: lev(w, c) };
+      });
+      if (best && (best.same || best.d <= Math.ceil(w.length * 0.5))) return { text: best.c, sure: false, was: it.text };
+      // rien de ressemblant : le plus long début qui est un vrai accord
+      for (let n = w.length - 1; n >= 1; n--) if (plausible(w.slice(0, n))) return { text: w.slice(0, n), sure: false, was: it.text };
+      return Object.assign({}, it, { sure: false });
+    });
   }
 
   function loadImage(file) {
@@ -573,7 +629,7 @@
         const boxes = highlights(small).flat().map((b) => ({ x: Math.round(b.x * k), y: Math.round(b.y * k), w: Math.round(b.w * k), h: Math.round(b.h * k) }));
         let found = boxes.length ? await readHighlights(big, boxes, step) : [];
         if (!found.length) found = await readPage(big, step);
-        items = found;
+        items = fixWeird(found);
         App.save('scoreChords', items);
         status.innerHTML = '';
         if (!items.length) status.appendChild(h('div', { class: 'notice warn', text: 'Je n’ai trouvé aucun accord sur cette photo. Essaie une photo plus nette et plus droite, ou écris les accords ci-dessous.' }));
@@ -589,12 +645,13 @@
       const panel = h('div', { class: 'panel' });
       // liste des accords lus : chaque case se modifie directement
       panel.appendChild(h('h2', { style: 'margin-top:0', text: 'Accords trouvés' }));
-      panel.appendChild(h('p', { class: 'hint', text: 'Si je me suis trompé, corrige directement dans les cases (ex. Am7, D-7, G7(b9), Bbmaj7…). ✕ supprime, ＋ insère un accord juste après. En orange : lecture incertaine, à vérifier.' }));
+      panel.appendChild(h('p', { class: 'hint', text: 'Si je me suis trompé, corrige directement dans les cases (ex. Am7, D-7, G7(b9), Bbmaj7…). ✕ supprime, ＋ insère un accord juste après. En orange : lecture incertaine, à vérifier. « lu … » : accord bizarre sur la photo, que j’ai remplacé par l’accord du morceau qui lui ressemble le plus.' }));
       const chips = h('div', { class: 'sc-chips' });
       const save = () => App.save('scoreChords', items);
       items.forEach((it, i) => {
         const chip = h('span', { class: 'sc-chip' + (it.sure ? '' : ' unsure') });
         chip.appendChild(h('small', { class: 'sc-num', text: String(i + 1) }));
+        if (it.was) chip.title = 'Lu « ' + it.was + ' » sur la partition : remplacé par un accord du morceau qui lui ressemble.';
         const inp = h('input', { class: 'sc-edit', type: 'text', value: it.text, 'aria-label': 'Accord n° ' + (i + 1), autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
         const fit = () => { inp.style.width = Math.max(2.5, inp.value.length + 1) + 'ch'; };
         fit();
@@ -604,7 +661,7 @@
           if (v === it.text) return;
           if (!v) { items.splice(i, 1); save(); draw(); return; }
           if (!parseChord(v)) { chip.classList.add('bad'); return; }
-          it.text = normalize(v); it.sure = true;
+          it.text = normalize(v); it.sure = true; delete it.was;
           save(); draw();
         };
         inp.addEventListener('change', commit);
@@ -618,7 +675,9 @@
         });
         const x = h('button', { class: 'sc-x', text: '✕', title: 'Supprimer' });
         x.addEventListener('click', () => { items.splice(i, 1); save(); draw(); });
-        chip.appendChild(inp); chip.appendChild(plus); chip.appendChild(x);
+        chip.appendChild(inp);
+        if (it.was) chip.appendChild(h('small', { class: 'sc-was', text: '(lu « ' + it.was + ' »)' }));
+        chip.appendChild(plus); chip.appendChild(x);
         chips.appendChild(chip);
       });
       if (!items.length) chips.appendChild(h('span', { class: 'muted', text: 'Aucun accord pour l’instant.' }));
@@ -698,5 +757,5 @@
     render
   });
 
-  window.ScoreChords = { parseChord, shapesFor, readChord };
+  window.ScoreChords = { parseChord, shapesFor, readChord, plausible, fixWeird };
 })();
