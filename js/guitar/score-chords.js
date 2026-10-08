@@ -662,6 +662,45 @@
   /* ================================================================== */
   /* Page                                                                */
   /* ================================================================== */
+  /* ================================================================== */
+  /* Piège : Bbm/Eb, Ab, Fm7, Bbm7                                       */
+  /* ================================================================== */
+  /** Plein écran moqueur + la vraie chanson, via la vidéo officielle sur YouTube (lecteur intégré). */
+  function rickroll() {
+    const old = document.querySelector('.rr-overlay');
+    if (old) old.remove();
+    const VIDEO = 'dQw4w9WgXcQ'; // Rick Astley – Never Gonna Give You Up (clip officiel)
+    const frame = h('iframe', {
+      class: 'rr-video', title: 'Never Gonna Give You Up',
+      src: 'https://www.youtube-nocookie.com/embed/' + VIDEO + '?autoplay=1&start=0&playsinline=1&rel=0',
+      allow: 'autoplay; encrypted-media; picture-in-picture', allowfullscreen: ''
+    });
+    const emojis = ['🫵', '😂', '🤣', '💀', '🫵', '😭', '🤡', '😂', '🫵', '🤣', '🕺', '😂'];
+    const rain = h('div', { class: 'rr-rain' }, Array.from({ length: 28 }, (_, i) => {
+      const e = h('span', { text: emojis[i % emojis.length] });
+      e.style.left = (Math.random() * 100) + '%';
+      e.style.animationDelay = (Math.random() * 3) + 's';
+      e.style.animationDuration = (2.5 + Math.random() * 2.5) + 's';
+      e.style.fontSize = (1.6 + Math.random() * 2.4) + 'rem';
+      return e;
+    }));
+    const close = h('button', { class: 'rr-close', text: '✕ OK, je me suis fait avoir 😭' });
+    const ov = h('div', { class: 'rr-overlay', role: 'dialog', 'aria-label': 'Rickroll' }, [
+      rain,
+      h('div', { class: 'rr-box' }, [
+        h('div', { class: 'rr-point', text: '🫵😂' }),
+        h('div', { class: 'rr-title', text: 'RICKROLL YOU DUMASS' }),
+        h('div', { class: 'rr-sub', text: '🫵😂🤣💀  Bbm/Eb – Ab – Fm7 – Bbm7… tu croyais vraiment que c’était du jazz ?  🤡😂🫵' }),
+        frame,
+        h('p', { class: 'rr-hint', text: 'Pas de son ? Appuie sur ▶ dans la vidéo (ton appareil bloque peut-être la lecture automatique).' }),
+        close
+      ])
+    ]);
+    close.addEventListener('click', () => ov.remove());
+    window.addEventListener('hashchange', () => ov.remove(), { once: true });
+    document.body.appendChild(ov);
+  }
+
   function render(el) {
     let items = App.store('scoreChords', []);
     const fileIn = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
@@ -781,12 +820,14 @@
 
     // passage secret : Em, G, Dsus4, A7sus4 → les guitares bizarres (seulement quand la liste vient de changer)
     const SECRET = 'em|g|dsus4|a7sus4';
+    const RICK = 'bbm/eb|ab|fm7|bbm7';
     let lastKey = items.map((x) => normalize(x.text).toLowerCase()).join('|');
     function draw() {
       const key = items.map((x) => normalize(x.text).toLowerCase()).join('|');
       if (key !== lastKey) {
         lastKey = key;
         if (key === SECRET) { location.hash = '#/guitare/guitares-bizarres'; return; }
+        if (key === RICK) rickroll();
       }
       result.innerHTML = '';
       const panel = h('div', { class: 'panel' });
@@ -843,6 +884,11 @@
       const clear = h('button', { class: 'btn small', text: '🗑 Tout effacer' });
       clear.addEventListener('click', () => { if (confirm('Effacer tous les accords ?')) { items = []; save(); draw(); } });
       panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn, clear]));
+      if (key === RICK) {
+        const again = h('button', { class: 'btn', text: '🎤 Rejouer le piège' });
+        again.addEventListener('click', rickroll);
+        panel.appendChild(h('div', { class: 'btn-row', style: 'margin-top:.8rem' }, [again]));
+      }
       // les accords secrets sont là : un bouton pour (re)visiter les guitares bizarres
       if (key === SECRET) {
         panel.appendChild(h('div', { class: 'btn-row', style: 'margin-top:.8rem' }, [

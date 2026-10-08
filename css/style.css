@@ -503,3 +503,20 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 .wg-stonks.wg-boing .wg-chart { stroke: #40c057; }
 .wg-sigma:hover .wg-svg { filter: grayscale(1) contrast(1.3); }
 @media (prefers-reduced-motion: reduce) { .wg-hand-l, .wg-hand-r, .wg-trail, .wg-star { animation: none; } }
+
+/* ---------- Piège Rickroll ---------- */
+.rr-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(10, 8, 20, .97); display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
+.rr-box { position: relative; z-index: 2; text-align: center; max-width: 720px; width: 100%; }
+.rr-point { font-size: clamp(3rem, 14vw, 7rem); line-height: 1; animation: rr-shake .35s ease-in-out infinite alternate; }
+.rr-title { font: 900 clamp(2rem, 9vw, 5rem)/1.05 'Arial Black', Arial, sans-serif; letter-spacing: .02em; margin: .3em 0; color: #fff; text-shadow: 4px 4px 0 #e03131, -3px -3px 0 #1971c2; animation: rr-pulse .6s ease-in-out infinite alternate, rr-hue 2s linear infinite; }
+.rr-sub { color: #ffe066; font-weight: 800; font-size: clamp(.95rem, 3.5vw, 1.3rem); margin-bottom: 14px; }
+.rr-video { width: 100%; aspect-ratio: 16 / 9; border: 4px solid #fff; border-radius: 12px; background: #000; }
+.rr-hint { color: #ced4da; font-size: .8rem; margin: 6px 0 12px; }
+.rr-close { font: inherit; font-weight: 800; border: 0; border-radius: 999px; padding: 10px 20px; background: #fff; color: #1d1b18; cursor: pointer; }
+.rr-rain { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.rr-rain span { position: absolute; top: -3rem; animation: rr-fall linear infinite; }
+@keyframes rr-fall { to { transform: translateY(110vh) rotate(360deg); } }
+@keyframes rr-shake { from { transform: rotate(-12deg) scale(1); } to { transform: rotate(12deg) scale(1.15); } }
+@keyframes rr-pulse { from { transform: scale(.96); } to { transform: scale(1.06); } }
+@keyframes rr-hue { to { filter: hue-rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rr-point, .rr-title, .rr-rain span { animation: none; } .rr-rain { display: none; } }
