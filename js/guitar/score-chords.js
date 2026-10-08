@@ -724,7 +724,7 @@
     ]);
     const troll = h('div', { class: 'rr-troll' }, [
       h('div', { class: 'rr-point', text: '🫵😂' }),
-      h('div', { class: 'rr-title', text: 'RICKROLL YOU DUMASS' }),
+      h('div', { class: 'rr-title', text: 'RICKROLLED YOU DUMASS' }),
       h('div', { class: 'rr-sub', text: '🫵😂🤣💀  Bbm/Eb – Ab – Fm7 – Bbm7… tu croyais vraiment que c’était du jazz ?  🤡😂🫵' })
     ]);
     const hint = h('p', { class: 'rr-hint', text: 'Appuie sur ▶ pour lancer le tuto.' });
