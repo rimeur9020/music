@@ -779,7 +779,15 @@
       return pan;
     }
 
+    // passage secret : Em, G, Dsus4, A7sus4 → les guitares bizarres (seulement quand la liste vient de changer)
+    const SECRET = 'em|g|dsus4|a7sus4';
+    let lastKey = items.map((x) => normalize(x.text).toLowerCase()).join('|');
     function draw() {
+      const key = items.map((x) => normalize(x.text).toLowerCase()).join('|');
+      if (key !== lastKey) {
+        lastKey = key;
+        if (key === SECRET) { location.hash = '#/guitare/guitares-bizarres'; return; }
+      }
       result.innerHTML = '';
       const panel = h('div', { class: 'panel' });
       // liste des accords lus : chaque case se modifie directement
