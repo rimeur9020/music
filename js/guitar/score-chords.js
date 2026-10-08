@@ -757,7 +757,9 @@
     document.body.appendChild(ov);
 
     // la chanson a-t-elle vraiment commencé ? (une pub ne fait pas avancer la vidéo elle-même)
-    let lastT = -1;
+    // on ne dévoile rien tant que la chanson elle-même n'a pas joué ~1,5 s d'affilée :
+    // pendant une pub (bouton « Passer », aperçu de la vidéo suivante…), le cache reste en place
+    let lastT = -1, lastAt = 0, good = 0;
     function watch() {
       clearInterval(timer);
       timer = setInterval(() => {
@@ -765,9 +767,13 @@
         if (!player || !player.getPlayerState) return;
         let st, t, d, id;
         try { st = player.getPlayerState(); t = player.getCurrentTime(); d = player.getDuration(); id = (player.getVideoData() || {}).video_id; } catch (e) { return; }
-        const isSong = (!id || id === VIDEO) && d > 180 && d < 260;
-        if (st === 1 && isSong && t > 0.3 && lastT >= 0 && t > lastT) boom();
-        lastT = st === 1 && isSong ? t : -1;
+        const now = Date.now();
+        const isSong = st === 1 && (!id || id === VIDEO) && d > 200 && d < 230;
+        // la vidéo avance au même rythme que l'horloge (une pub ne fait pas avancer la chanson)
+        const step = lastT >= 0 ? t - lastT : 0, wall = (now - lastAt) / 1000;
+        if (isSong && lastT >= 0 && step > wall * 0.5 && step < wall * 2 + 0.3) good++; else good = 0;
+        lastT = isSong ? t : -1; lastAt = now;
+        if (good >= 6 && t >= 1.5) boom();
       }, 250);
     }
 
