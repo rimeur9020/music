@@ -843,6 +843,12 @@
       const clear = h('button', { class: 'btn small', text: '🗑 Tout effacer' });
       clear.addEventListener('click', () => { if (confirm('Effacer tous les accords ?')) { items = []; save(); draw(); } });
       panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn, clear]));
+      // les accords secrets sont là : un bouton pour (re)visiter les guitares bizarres
+      if (key === SECRET) {
+        panel.appendChild(h('div', { class: 'btn-row', style: 'margin-top:.8rem' }, [
+          h('a', { class: 'btn primary', href: '#/guitare/guitares-bizarres', text: '🎸 Voir les guitares bizarres' })
+        ]));
+      }
       result.appendChild(panel);
       result.appendChild(formPanel());
 
