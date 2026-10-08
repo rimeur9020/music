@@ -520,3 +520,9 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 @keyframes rr-pulse { from { transform: scale(.96); } to { transform: scale(1.06); } }
 @keyframes rr-hue { to { filter: hue-rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .rr-point, .rr-title, .rr-rain span { animation: none; } .rr-rain { display: none; } }
+.sc-explain { margin-top: .9rem; padding: .6rem .8rem; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); }
+.sc-explain p { margin: 0 0 .4rem; font-size: .9rem; }
+.sc-examples { display: flex; flex-wrap: wrap; gap: 8px; }
+.sc-ex-item { display: inline-flex; align-items: center; gap: 4px; }
+.sc-example { font: inherit; font-weight: 700; font-size: .85rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); padding: 3px 10px; cursor: pointer; }
+.sc-example:hover { border-color: var(--guitar); }

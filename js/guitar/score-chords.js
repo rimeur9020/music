@@ -883,6 +883,21 @@
       add.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
       const clear = h('button', { class: 'btn small', text: '🗑 Tout effacer' });
       clear.addEventListener('click', () => { if (confirm('Effacer tous les accords ?')) { items = []; save(); draw(); } });
+      // petite explication + les deux suites « spéciales » à essayer
+      const tryIt = (seq) => {
+        if (items.length && !confirm('Remplacer tes accords par « ' + seq.join(' ') + ' » ?')) return;
+        items = seq.map((t) => ({ text: t, sure: true }));
+        save(); draw();
+      };
+      const ex = (label, seq) => {
+        const b = h('button', { class: 'sc-example', text: seq.join(' – '), title: 'Essayer' });
+        b.addEventListener('click', () => tryIt(seq));
+        return h('span', { class: 'sc-ex-item' }, [h('span', { text: label }), b]);
+      };
+      panel.appendChild(h('div', { class: 'sc-explain' }, [
+        h('p', { text: '✍️ Tu peux aussi écrire tes accords toi-même ici (séparés par des espaces), sans photo. Et certaines suites font quelque chose de spécial… essaie :' }),
+        h('div', { class: 'sc-examples' }, [ex('🎸', ['Em', 'G', 'Dsus4', 'A7sus4']), ex('🎤', ['Bbm/Eb', 'Ab', 'Fm7', 'Bbm7'])])
+      ]));
       panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn, clear]));
       if (key === RICK) {
         const again = h('button', { class: 'btn', text: '🎤 Rejouer le piège' });
