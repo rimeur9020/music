@@ -665,6 +665,25 @@
   /* ================================================================== */
   /* Piège : Bbm/Eb, Ab, Fm7, Bbm7                                       */
   /* ================================================================== */
+  /** Fausse miniature : un tuto guitare jazz bien banal, avec un ▶ au centre (là où est celui de YouTube). */
+  const FAKE_THUMB = `<svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="rrg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b2a3a"/><stop offset="1" stop-color="#3d2a1a"/></linearGradient></defs>
+    <rect width="320" height="180" fill="url(#rrg)"/>
+    <g transform="translate(205 18) rotate(8)">
+      <rect width="90" height="150" rx="4" fill="#6b4423"/>
+      ${[1, 2, 3, 4, 5].map((k) => `<line x1="0" x2="90" y1="${k * 26}" y2="${k * 26}" stroke="#d9c7a7" stroke-width="2"/>`).join('')}
+      ${[0, 1, 2, 3, 4, 5].map((k) => `<line y1="0" y2="150" x1="${8 + k * 14.8}" x2="${8 + k * 14.8}" stroke="#eee" stroke-width="${1.6 - k * 0.15}"/>`).join('')}
+      <circle cx="22.8" cy="13" r="7" fill="#e8590c"/><circle cx="52.4" cy="39" r="7" fill="#fff"/><circle cx="67.2" cy="39" r="7" fill="#fff"/><circle cx="37.6" cy="65" r="7" fill="#fff"/>
+    </g>
+    <text x="16" y="40" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="25" fill="#ffd43b">4 ACCORDS</text>
+    <text x="16" y="68" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="25" fill="#fff">JAZZ 🔥</text>
+    <rect x="14" y="118" width="172" height="22" rx="4" fill="#e8590c"/>
+    <text x="22" y="134" font-family="Arial, sans-serif" font-weight="700" font-size="13" fill="#fff">Bbm/Eb · Ab · Fm7 · Bbm7</text>
+    <text x="16" y="160" font-family="Arial, sans-serif" font-size="11" fill="#ced4da">Tuto guitare · débutant / intermédiaire</text>
+    <rect x="270" y="152" width="40" height="18" rx="3" fill="rgba(0,0,0,.8)"/><text x="290" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#fff">8:14</text>
+    <g transform="translate(160 90)"><rect x="-30" y="-21" width="60" height="42" rx="12" fill="#e03131"/><path d="M-9 -12 L14 0 L-9 12 Z" fill="#fff"/></g>
+  </svg>`;
+
   let ytApi = null;
   function loadYT() {
     if (window.YT && window.YT.Player) return Promise.resolve();
@@ -695,12 +714,9 @@
     const emojis = ['🫵', '😂', '🤣', '💀', '🫵', '😭', '🤡', '😂', '🫵', '🤣', '🕺', '😂'];
     const rain = h('div', { class: 'rr-rain' });
     const holder = h('div', { class: 'rr-video' }, [h('div', { id: 'rr-player' })]);
-    // cache par-dessus la vidéo (on ne voit pas la miniature avant de lancer)
-    const playBtn = h('button', { class: 'rr-play', html: '▶<span>Voir les accords</span>' });
-    const cover = h('div', { class: 'rr-cover' }, [
-      h('div', { class: 'rr-cover-title', text: '🎸 Tuto vidéo : Bbm/Eb – Ab – Fm7 – Bbm7' }),
-      playBtn
-    ]);
+    // fausse miniature « tuto guitare » posée sur la vidéo : elle cache la vraie miniature, le titre,
+    // les pubs… Elle laisse passer les touchers : appuyer sur son ▶ appuie sur celui de YouTube, juste dessous.
+    const cover = h('div', { class: 'rr-cover', html: FAKE_THUMB });
     holder.appendChild(cover);
     const bait = h('div', { class: 'rr-bait' }, [
       h('div', { class: 'rr-bait-title', text: '🎵 Tes accords sont prêts !' }),
@@ -711,15 +727,16 @@
       h('div', { class: 'rr-title', text: 'RICKROLL YOU DUMASS' }),
       h('div', { class: 'rr-sub', text: '🫵😂🤣💀  Bbm/Eb – Ab – Fm7 – Bbm7… tu croyais vraiment que c’était du jazz ?  🤡😂🫵' })
     ]);
-    const hint = h('p', { class: 'rr-hint', text: '' });
+    const hint = h('p', { class: 'rr-hint', text: 'Appuie sur ▶ pour lancer le tuto.' });
     const close = h('button', { class: 'rr-close', text: '✕ Fermer' });
-    const ov = h('div', { class: 'rr-overlay', role: 'dialog', 'aria-label': 'Vidéo' }, [rain, h('div', { class: 'rr-box' }, [bait, troll, holder, hint, close])]);
+    const ov = h('div', { class: 'rr-overlay', role: 'dialog', 'aria-label': 'Tuto guitare' }, [rain, h('div', { class: 'rr-box' }, [bait, troll, holder, hint, close])]);
 
     function boom() {
       if (started) return;
       started = true;
       clearInterval(timer);
       ov.classList.add('rr-on');
+      cover.remove();
       close.textContent = '✕ OK, je me suis fait avoir 😭';
       for (let i = 0; i < 28; i++) {
         const e = h('span', { text: emojis[i % emojis.length] });
@@ -757,7 +774,7 @@
     loadYT().then(() => {
       player = new YT.Player('rr-player', {
         videoId: VIDEO, width: '100%', height: '100%',
-        playerVars: { rel: 0, playsinline: 1, modestbranding: 1, controls: 1 },
+        playerVars: { rel: 0, playsinline: 1, modestbranding: 1, controls: 1, iv_load_policy: 3, disablekb: 1, fs: 0 },
         events: { onStateChange: watch }
       });
       watch();
@@ -769,11 +786,10 @@
       }));
     });
 
-    playBtn.addEventListener('click', () => {
-      cover.remove();
-      try { if (player && player.playVideo) player.playVideo(); } catch (e) { /* rien */ }
-      hint.textContent = 'Si la vidéo ne démarre pas toute seule, appuie sur ▶ dans la vidéo.';
-      if (!player) setTimeout(boom, 4000); // sans API, on ne peut pas savoir : on attend un peu
+    // sans API YouTube, on ne peut pas suivre la lecture : on repère le toucher dans la vidéo
+    window.addEventListener('blur', function onBlur() {
+      if (!document.body.contains(ov)) { window.removeEventListener('blur', onBlur); return; }
+      if (document.activeElement && document.activeElement.tagName === 'IFRAME' && !player) { window.removeEventListener('blur', onBlur); setTimeout(boom, 4000); }
     });
   }
 
@@ -972,11 +988,11 @@
       };
       panel.appendChild(h('div', { class: 'sc-explain' }, [
         h('p', { text: '✍️ Tu peux aussi écrire tes accords toi-même ici (séparés par des espaces), sans photo. Et certaines suites font quelque chose de spécial… essaie :' }),
-        h('div', { class: 'sc-examples' }, [ex('🎸', ['Em', 'G', 'Dsus4', 'A7sus4']), ex('🎤', ['Bbm/Eb', 'Ab', 'Fm7', 'Bbm7'])])
+        h('div', { class: 'sc-examples' }, [ex('🎸', ['Em', 'G', 'Dsus4', 'A7sus4']), ex('🎬', ['Bbm/Eb', 'Ab', 'Fm7', 'Bbm7'])])
       ]));
       panel.appendChild(h('div', { class: 'free-search', style: 'margin-top:.6rem' }, [add, addBtn, clear]));
       if (key === RICK) {
-        const again = h('button', { class: 'btn', text: '🎤 Rejouer le piège' });
+        const again = h('button', { class: 'btn', text: '🎬 Revoir le tuto vidéo' });
         again.addEventListener('click', rickroll);
         panel.appendChild(h('div', { class: 'btn-row', style: 'margin-top:.8rem' }, [again]));
       }
