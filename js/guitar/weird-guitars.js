@@ -338,6 +338,190 @@
         mk('rect', { x: 92, y: 158, width: 16, height: 86, fill: '#2b3d2b' });
         mk('circle', { cx: 160, cy: 245, r: 9, fill: '#94d82d' });
       }
+    }    ,
+    {
+      name: 'La 6-7', cls: 'wg-67', sound: 'six-seven', say: 'SIX… SEVEEEN 🤷', desc: 'Six… seven. Personne ne sait ce que ça veut dire, elle non plus. Les mains font la balance toutes seules.',
+      draw: (mk) => {
+        mk('text', { x: 52, y: 215, 'font-size': 150, 'font-weight': 900, fill: '#f76707', stroke: '#7a2e00', 'stroke-width': 3, 'font-family': 'Arial Black, Arial, sans-serif' }, '6').textContent = '6';
+        mk('path', { d: 'M110 20 L170 20 L170 38 L135 150 L113 150 L148 40 L110 40 Z', fill: '#8a5a2b', stroke: '#3b2412', 'stroke-width': 2 });
+        for (let k = 0; k < 6; k++) mk('line', { x1: 118 + k * 7, x2: 120 + k * 3, y1: 25, y2: 210, stroke: '#eee', 'stroke-width': 0.6 });
+        const hand = (x, cls) => { const g = mk('g', { class: cls }); mk('path', { d: `M${x} 245 l0 -22 q0 -8 8 -8 l14 0 q8 0 8 8 l0 22 z`, fill: '#ffd8a8', stroke: '#c56d00', 'stroke-width': 1.5 }, g); [0, 7, 14, 21].forEach((d) => mk('rect', { x: x + 2 + d * 0.95, y: 205, width: 5, height: 12, rx: 2.5, fill: '#ffd8a8', stroke: '#c56d00', 'stroke-width': 1 }, g)); return g; };
+        hand(30, 'wg-hand-l'); hand(140, 'wg-hand-r');
+        hole(mk, 92, 168, 11);
+      }
+    },
+    {
+      name: 'La 69', sound: 'nice', say: 'Nice. 👌', desc: 'Ne joue qu’un seul accord : le 6/9. Les jazzmen trouvent ça très… nice.',
+      draw: (mk) => {
+        neck(mk, 100, 120, 95, 0, 6, '#1d1b18');
+        mk('circle', { cx: 100, cy: 185, r: 62, fill: '#fff', stroke: '#1d1b18', 'stroke-width': 3 });
+        mk('path', { d: 'M100 123 A62 62 0 0 1 100 247 A31 31 0 0 1 100 185 A31 31 0 0 0 100 123 Z', fill: '#1d1b18' });
+        mk('text', { x: 100, y: 172, 'text-anchor': 'middle', 'font-size': 34, 'font-weight': 900, fill: '#1d1b18' }, '6').textContent = '6';
+        mk('text', { x: 100, y: 230, 'text-anchor': 'middle', 'font-size': 34, 'font-weight': 900, fill: '#fff' }, '9').textContent = '9';
+      }
+    },
+    {
+      name: 'La Tung Tung Tung Sahur', cls: 'wg-sahur', sound: 'sahur', say: 'TUNG TUNG TUNG… SAHUR !', desc: 'Une bûche avec une batte de baseball en guise de manche. Au lieu de jouer, elle tape. Trois fois.',
+      draw: (mk) => {
+        mk('rect', { x: 128, y: 30, width: 16, height: 120, rx: 8, fill: '#d9a066', stroke: '#7a4a1a', 'stroke-width': 2, transform: 'rotate(18 136 90)' });
+        mk('rect', { x: 132, y: 135, width: 8, height: 40, rx: 4, fill: '#7a4a1a', transform: 'rotate(18 136 90)' });
+        mk('rect', { x: 55, y: 70, width: 70, height: 170, rx: 30, fill: '#c08552', stroke: '#6b3e16', 'stroke-width': 3 });
+        mk('ellipse', { cx: 90, cy: 76, rx: 33, ry: 9, fill: '#e3b07a', stroke: '#6b3e16', 'stroke-width': 2 });
+        [70, 82, 94].forEach((r) => mk('ellipse', { cx: 90, cy: 76, rx: r - 63, ry: (r - 63) / 3.6, fill: 'none', stroke: '#a0672f' }));
+        mk('ellipse', { cx: 76, cy: 130, rx: 8, ry: 10, fill: '#fff' }); mk('ellipse', { cx: 104, cy: 130, rx: 8, ry: 10, fill: '#fff' });
+        mk('circle', { cx: 78, cy: 132, r: 4, fill: '#000' }); mk('circle', { cx: 102, cy: 132, r: 4, fill: '#000' });
+        mk('path', { d: 'M74 160 Q90 172 106 160', fill: 'none', stroke: '#3b2412', 'stroke-width': 3 });
+        mk('path', { d: 'M55 160 L35 190 M125 160 L138 150', stroke: '#6b3e16', 'stroke-width': 6, 'stroke-linecap': 'round' });
+        [[40, 55, 'TUNG'], [12, 90, 'TUNG'], [30, 260, 'TUNG']].forEach(([x, y, t]) => mk('text', { x, y, 'font-size': 12, 'font-weight': 900, fill: '#e03131', transform: `rotate(-12 ${x} ${y})` }, t).textContent = t);
+      }
+    },
+    {
+      name: 'La Tralalero Tralala', sound: 'chaos', say: 'Tralalero tralala 🦈👟', desc: 'Un requin en baskets. Il court plus vite que le tempo, et il a trois pattes. Personne ne pose de questions.',
+      draw: (mk) => {
+        neck(mk, 120, 130, 90, 20, 6, '#1971c2');
+        mk('path', { d: 'M20 170 Q60 120 130 140 Q170 150 185 175 Q160 190 130 190 Q70 200 20 170 Z', fill: '#74c0fc', stroke: '#1864ab', 'stroke-width': 2 });
+        mk('path', { d: 'M90 135 L105 100 L118 140 Z', fill: '#74c0fc', stroke: '#1864ab', 'stroke-width': 2 });
+        mk('path', { d: 'M22 170 L2 150 L8 172 L2 192 Z', fill: '#74c0fc', stroke: '#1864ab', 'stroke-width': 2 });
+        mk('circle', { cx: 160, cy: 165, r: 4, fill: '#000' });
+        mk('path', { d: 'M150 180 l5 6 l5 -6 l5 6 l5 -6', fill: '#fff', stroke: '#1864ab' });
+        [[60, 192], [95, 195], [125, 190]].forEach(([x, y]) => {
+          mk('line', { x1: x, x2: x, y1: y, y2: y + 30, stroke: '#1864ab', 'stroke-width': 4 });
+          mk('path', { d: `M${x - 6} ${y + 30} l26 0 q4 0 4 6 l0 4 l-32 0 q-2 -10 2 -10 z`, fill: '#1c7ed6', stroke: '#0b3d7a', 'stroke-width': 1.5 });
+          mk('path', { d: `M${x - 6} ${y + 40} l32 0`, stroke: '#fff', 'stroke-width': 2 });
+        });
+        hole(mk, 85, 165, 9);
+      }
+    },
+    {
+      name: 'La Bombardiro Crocodilo', cls: 'wg-rocket', sound: 'wg-rocket', say: 'Bombardiro crocodilo ✈️🐊', desc: 'Moitié crocodile, moitié avion de guerre. Fait des larsens à 10 000 mètres d’altitude.',
+      draw: (mk) => {
+        mk('path', { d: 'M100 15 Q125 30 125 70 L125 200 Q100 215 75 200 L75 70 Q75 30 100 15 Z', fill: '#5c940d', stroke: '#2b4a06', 'stroke-width': 2 });
+        mk('path', { d: 'M75 110 L10 150 L10 165 L75 145 Z M125 110 L190 150 L190 165 L125 145 Z', fill: '#868e96', stroke: '#343a40', 'stroke-width': 2 });
+        mk('path', { d: 'M80 200 L60 240 L80 232 Z M120 200 L140 240 L120 232 Z', fill: '#868e96', stroke: '#343a40', 'stroke-width': 2 });
+        mk('path', { d: 'M82 40 l6 6 l6 -6 l6 6 l6 -6 l6 6', fill: 'none', stroke: '#fff', 'stroke-width': 2 });
+        mk('circle', { cx: 88, cy: 60, r: 5, fill: '#ffd43b' }); mk('circle', { cx: 112, cy: 60, r: 5, fill: '#ffd43b' });
+        mk('circle', { cx: 88, cy: 60, r: 2, fill: '#000' }); mk('circle', { cx: 112, cy: 60, r: 2, fill: '#000' });
+        for (let i = 0; i < 6; i++) mk('line', { x1: 90 + i * 4, x2: 90 + i * 4, y1: 75, y2: 195, stroke: '#e9ecef', 'stroke-width': 0.7 });
+        [[30, 158], [170, 158]].forEach(([x, y]) => mk('rect', { x: x - 5, y, width: 10, height: 22, rx: 4, fill: '#495057' }));
+        mk('path', { d: 'M90 215 Q100 250 110 215 Z', fill: '#ff922b', class: 'wg-flame' });
+      }
+    },
+    {
+      name: 'La Ballerina Cappuccina', cls: 'wg-spin', sound: 'nice', say: 'Ballerina cappuccina ☕🩰', desc: 'Une tasse de cappuccino en tutu. Elle fait des pirouettes en jouant. Attention, ça éclabousse.',
+      draw: (mk) => {
+        neck(mk, 100, 110, 85, 0, 6, '#6f4e37');
+        mk('ellipse', { cx: 100, cy: 112, rx: 48, ry: 10, fill: '#f3e0c7', stroke: '#6f4e37', 'stroke-width': 2 });
+        mk('path', { d: 'M52 112 L60 175 Q100 190 140 175 L148 112 Z', fill: '#fff', stroke: '#6f4e37', 'stroke-width': 2 });
+        mk('path', { d: 'M148 125 Q172 128 168 150 Q164 168 142 162', fill: 'none', stroke: '#6f4e37', 'stroke-width': 5 });
+        mk('path', { d: 'M90 108 q10 -10 20 0 q-10 8 -20 0', fill: '#a9744f' });
+        mk('path', { d: 'M40 180 Q100 160 160 180 Q150 200 100 196 Q50 200 40 180 Z', fill: '#f783ac', stroke: '#c2255c', 'stroke-width': 2 });
+        mk('line', { x1: 88, x2: 80, y1: 196, y2: 250, stroke: '#6f4e37', 'stroke-width': 4 });
+        mk('line', { x1: 112, x2: 122, y1: 196, y2: 248, stroke: '#6f4e37', 'stroke-width': 4 });
+        mk('ellipse', { cx: 78, cy: 252, rx: 8, ry: 4, fill: '#f783ac' }); mk('ellipse', { cx: 124, cy: 250, rx: 8, ry: 4, fill: '#f783ac' });
+        mk('circle', { cx: 86, cy: 140, r: 3, fill: '#000' }); mk('circle', { cx: 114, cy: 140, r: 3, fill: '#000' });
+        mk('path', { d: 'M92 155 Q100 162 108 155', fill: 'none', stroke: '#000', 'stroke-width': 2 });
+      }
+    },
+    {
+      name: 'La Doge', say: 'wow. such guitar. much jazz. very 6/9.', desc: 'Much guitar. Very wow. Such accords. So jazz.',
+      draw: (mk) => {
+        neck(mk, 100, 120, 95, 0, 6, '#c08a3e');
+        mk('path', { d: 'M45 140 L52 100 L80 128 Q100 122 120 128 L148 100 L155 140 Q172 200 100 248 Q28 200 45 140 Z', fill: '#e6b566', stroke: '#8a5a1e', 'stroke-width': 2 });
+        mk('path', { d: 'M65 185 Q100 245 135 185 Q100 200 65 185 Z', fill: '#fff4e0' });
+        mk('path', { d: 'M75 160 q8 -6 14 0 M111 160 q8 -6 14 0', fill: 'none', stroke: '#3b2412', 'stroke-width': 3 });
+        mk('ellipse', { cx: 100, cy: 192, rx: 9, ry: 6, fill: '#3b2412' });
+        mk('path', { d: 'M100 198 Q100 210 88 212 M100 198 Q100 210 112 212', fill: 'none', stroke: '#3b2412', 'stroke-width': 2 });
+        [['wow', 10, 60, '#e03131'], ['such guitar', 120, 40, '#1971c2'], ['much jazz', 5, 240, '#2f9e44'], ['so 6/9', 140, 255, '#9c36b5']].forEach(([t, x, y, c]) => mk('text', { x, y, 'font-size': 13, fill: c, 'font-family': 'Comic Sans MS, Comic Neue, cursive' }, t).textContent = t);
+      }
+    },
+    {
+      name: 'La Nyan-Guitare', cls: 'wg-nyan', sound: 'nyan', say: 'nyan nyan nyan 🌈', desc: 'Corps en biscuit fourré, traîne un arc-en-ciel derrière elle. Vole à travers l’espace en boucle.',
+      draw: (mk) => {
+        ['#ff6b6b', '#ff922b', '#ffd43b', '#69db7c', '#4dabf7', '#9775fa'].forEach((c, i) => mk('rect', { x: 0, y: 150 + i * 8, width: 70, height: 8, fill: c, class: 'wg-trail' }));
+        neck(mk, 125, 140, 90, 0, 6, '#495057');
+        mk('rect', { x: 68, y: 140, width: 90, height: 70, rx: 10, fill: '#e8a33d', stroke: '#8a4b08', 'stroke-width': 2 });
+        mk('rect', { x: 76, y: 148, width: 74, height: 54, rx: 8, fill: '#ffa8d0' });
+        [[85, 160], [110, 155], [135, 165], [95, 185], [125, 190]].forEach(([x, y]) => mk('circle', { cx: x, cy: y, r: 2.5, fill: '#e64980' }));
+        mk('rect', { x: 150, y: 160, width: 36, height: 30, rx: 8, fill: '#868e96', stroke: '#343a40', 'stroke-width': 2 });
+        mk('path', { d: 'M152 162 l4 -10 l8 10 M174 162 l8 -10 l4 10', fill: '#868e96', stroke: '#343a40', 'stroke-width': 2 });
+        mk('circle', { cx: 162, cy: 172, r: 2.5, fill: '#000' }); mk('circle', { cx: 176, cy: 172, r: 2.5, fill: '#000' });
+        [[80, 212], [100, 212], [130, 212], [150, 212]].forEach(([x, y]) => mk('rect', { x, y, width: 8, height: 10, rx: 3, fill: '#868e96', stroke: '#343a40' }));
+        [[20, 60], [60, 100], [170, 70], [30, 240], [180, 240]].forEach(([x, y]) => mk('path', { d: `M${x} ${y - 5} L${x} ${y + 5} M${x - 5} ${y} L${x + 5} ${y}`, stroke: '#ffd43b', 'stroke-width': 2, class: 'wg-star' }));
+      }
+    },
+    {
+      name: 'La Stonks', cls: 'wg-stonks', sound: 'up', say: 'STONKS 📈', desc: 'Son manche ne fait que monter. Investissement conseillé : acheter des cordes.',
+      draw: (mk) => {
+        mk('path', { d: 'M20 230 L60 190 L85 205 L125 130 L145 145 L180 40', fill: 'none', stroke: '#2b8a3e', 'stroke-width': 14, 'stroke-linejoin': 'round', class: 'wg-chart' });
+        mk('path', { d: 'M180 40 L160 48 M180 40 L182 62', stroke: '#2b8a3e', 'stroke-width': 14, 'stroke-linecap': 'round' });
+        for (let i = 0; i < 4; i++) mk('path', { d: `M${20} ${226 + i * 2} L60 ${186 + i * 2} L85 ${201 + i * 2} L125 ${126 + i * 2} L145 ${141 + i * 2} L180 ${36 + i * 2}`, fill: 'none', stroke: '#eee', 'stroke-width': 0.5 });
+        mk('ellipse', { cx: 60, cy: 215, rx: 40, ry: 32, fill: '#212529' });
+        mk('circle', { cx: 60, cy: 215, r: 9, fill: '#f8f9fa' });
+        mk('text', { x: 100, y: 255, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 900, fill: '#2b8a3e', 'font-family': 'Arial Black, Arial' }, 'STONKS').textContent = 'STONKS';
+      }
+    },
+    {
+      name: 'La Skibidi', sound: 'chaos', say: 'skibidi dop dop yes yes 🚽', desc: 'Une tête qui sort d’une cuvette, avec un manche. Joue uniquement du « skibidi jazz ».',
+      draw: (mk) => {
+        neck(mk, 100, 95, 75, 0, 6, '#495057');
+        mk('circle', { cx: 100, cy: 120, r: 30, fill: '#ffd8a8', stroke: '#c56d00', 'stroke-width': 2 });
+        mk('circle', { cx: 89, cy: 115, r: 4, fill: '#000' }); mk('circle', { cx: 111, cy: 115, r: 4, fill: '#000' });
+        mk('path', { d: 'M88 132 Q100 142 112 132', fill: '#c92a2a', stroke: '#000', 'stroke-width': 1.5 });
+        mk('ellipse', { cx: 100, cy: 152, rx: 62, ry: 16, fill: '#f8f9fa', stroke: '#868e96', 'stroke-width': 3 });
+        mk('ellipse', { cx: 100, cy: 150, rx: 44, ry: 9, fill: '#a5d8ff' });
+        mk('path', { d: 'M42 156 Q46 205 80 212 L80 245 L120 245 L120 212 Q154 205 158 156 Z', fill: '#f8f9fa', stroke: '#868e96', 'stroke-width': 3 });
+        mk('rect', { x: 150, y: 70, width: 40, height: 80, rx: 6, fill: '#f8f9fa', stroke: '#868e96', 'stroke-width': 3 });
+        mk('rect', { x: 160, y: 80, width: 16, height: 6, rx: 3, fill: '#adb5bd' });
+      }
+    },
+    {
+      name: 'La Sus', sound: 'sus', say: 'ඞ … c’est elle l’imposteur.', desc: 'Elle a l’air innocente, mais elle joue des accords sus4 en cachette. Très sus.',
+      draw: (mk) => {
+        neck(mk, 100, 110, 85, 0, 6, '#c92a2a');
+        mk('path', { d: 'M60 140 Q60 95 100 95 Q140 95 140 140 L140 235 L115 235 L115 210 L85 210 L85 235 L60 235 Z', fill: '#e03131', stroke: '#1d1b18', 'stroke-width': 4 });
+        mk('rect', { x: 36, y: 140, width: 26, height: 60, rx: 10, fill: '#c92a2a', stroke: '#1d1b18', 'stroke-width': 4 });
+        mk('path', { d: 'M88 120 L132 120 Q140 120 140 135 Q140 150 132 150 L88 150 Q80 150 80 135 Q80 120 88 120 Z', fill: '#99e9f2', stroke: '#1d1b18', 'stroke-width': 4 });
+        mk('path', { d: 'M100 128 L125 128', stroke: '#fff', 'stroke-width': 4, 'stroke-linecap': 'round' });
+        mk('text', { x: 100, y: 190, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 900, fill: '#fff' }, 'sus4').textContent = 'sus4';
+      }
+    },
+    {
+      name: 'La « C’est bien »', cls: 'wg-fire', sound: 'chaos', say: 'C’est bien. ☕🔥', desc: 'Elle joue tranquillement pendant que tout brûle autour. Rien à signaler.',
+      draw: (mk) => {
+        [[20, 250, 40], [60, 250, 55], [150, 250, 50], [185, 250, 38], [5, 200, 30], [190, 190, 30]].forEach(([x, y, hh]) => mk('path', { d: `M${x - 14} ${y} Q${x - 16} ${y - hh * 0.6} ${x} ${y - hh} Q${x + 16} ${y - hh * 0.6} ${x + 14} ${y} Z`, fill: '#ff922b', class: 'wg-flame' }));
+        neck(mk, 100, 140, 95, -6, 6, '#3b2412');
+        mk('path', { d: 'M100 140 C60 135 45 170 62 195 C40 225 70 255 100 250 C130 255 160 225 138 195 C155 170 140 135 100 140 Z', fill: '#f2c94c', stroke: '#8a6d00', 'stroke-width': 2 });
+        mk('circle', { cx: 86, cy: 180, r: 4, fill: '#000' }); mk('circle', { cx: 114, cy: 180, r: 4, fill: '#000' });
+        mk('path', { d: 'M86 200 Q100 210 114 200', fill: 'none', stroke: '#000', 'stroke-width': 2.5 });
+        mk('rect', { x: 140, y: 205, width: 16, height: 18, rx: 2, fill: '#fff', stroke: '#495057' });
+        mk('path', { d: 'M156 210 q6 0 6 5 q0 5 -6 5', fill: 'none', stroke: '#495057', 'stroke-width': 2 });
+      }
+    },
+    {
+      name: 'La Sigma', cls: 'wg-sigma', say: '🗿', desc: 'Ne sourit jamais. Joue seule, se lève à 4 h du matin pour travailler ses gammes.',
+      draw: (mk) => {
+        neck(mk, 100, 140, 95, 0, 6, '#1d1b18');
+        mk('path', { d: 'M100 140 C60 135 45 170 62 195 C40 225 70 255 100 250 C130 255 160 225 138 195 C155 170 140 135 100 140 Z', fill: '#495057', stroke: '#1d1b18', 'stroke-width': 2 });
+        mk('path', { d: 'M62 170 L138 170 L134 186 Q120 192 106 186 L100 178 L94 186 Q80 192 66 186 Z', fill: '#000' });
+        mk('path', { d: 'M74 175 l8 -3', stroke: '#fff', 'stroke-width': 2 });
+        mk('path', { d: 'M86 215 L114 215', stroke: '#000', 'stroke-width': 3, 'stroke-linecap': 'round' });
+        mk('path', { d: 'M100 192 L96 206 L104 206', fill: 'none', stroke: '#000', 'stroke-width': 2 });
+        mk('text', { x: 100, y: 248, 'text-anchor': 'middle', 'font-size': 26, 'font-weight': 900, fill: '#fff' }, 'Σ').textContent = 'Σ';
+      }
+    },
+    {
+      name: 'La Rickroll', say: 'Never gonna give you up… ta guitare. 🎤', desc: 'Tu croyais toucher une guitare normale ? Tu viens de te faire avoir.',
+      draw: (mk) => {
+        neck(mk, 100, 140, 95, 0, 6, '#495057');
+        mk('path', { d: 'M100 140 C60 135 45 170 62 195 C40 225 70 255 100 250 C130 255 160 225 138 195 C155 170 140 135 100 140 Z', fill: '#212529', stroke: '#000', 'stroke-width': 2 });
+        mk('path', { d: 'M70 160 Q75 140 100 142 Q125 140 130 160 Q120 150 100 152 Q80 150 70 160 Z', fill: '#a0522d' });
+        mk('circle', { cx: 100, cy: 175, r: 16, fill: '#ffd8a8' });
+        mk('path', { d: 'M84 168 Q90 152 100 152 Q112 152 116 168 Q108 160 100 162 Q92 160 84 168 Z', fill: '#a0522d' });
+        mk('path', { d: 'M94 183 Q100 188 106 183', fill: 'none', stroke: '#000', 'stroke-width': 1.5 });
+        mk('path', { d: 'M78 200 L122 200 L128 250 L72 250 Z', fill: '#343a40' });
+        mk('path', { d: 'M95 200 L100 215 L105 200', fill: '#fff' });
+        mk('text', { x: 100, y: 30, 'text-anchor': 'middle', 'font-size': 11, fill: '#868e96' }, '♪ never gonna ♪').textContent = '♪ never gonna ♪';
+      }
     }
   ];
 
@@ -355,11 +539,26 @@
   function weirdSound(kind) {
     try {
       const t = Audio2.now() + 0.05;
-      if (kind === 'wg-rocket') for (let k = 0; k < 14; k++) Audio2.guitar(40 + k * 3, t + k * 0.05, 0.4, 0.4); // décollage
+      if (kind === 'six-seven') [0, 1, 0, 1, 0, 1].forEach((k, j) => Audio2.guitar(k ? 67 : 66, t + j * 0.22, 0.5, 0.5)); // fa# 6… sol 7…
+      else if (kind === 'nice') [45, 52, 54, 59, 62, 66].forEach((m, k) => Audio2.guitar(m, t + k * 0.05, 2.5, 0.45)); // un vrai La6/9
+      else if (kind === 'sahur') { [0, 0.35, 0.7].forEach((d) => Audio2.click(t + d, true)); Audio2.guitar(38, t + 1.2, 1.2, 0.6); }
+      else if (kind === 'nyan') [76, 78, 73, 74, 72, 74, 73, 71].forEach((m, k) => Audio2.guitar(m, t + k * 0.13, 0.3, 0.35));
+      else if (kind === 'up') for (let k = 0; k < 12; k++) Audio2.guitar(48 + k * 2, t + k * 0.07, 0.4, 0.4);
+      else if (kind === 'sus') [50, 57, 62, 67].forEach((m, k) => Audio2.guitar(m, t + k * 0.04, 2, 0.45)); // Dsus4, évidemment
+      else if (kind === 'wg-rocket') for (let k = 0; k < 14; k++) Audio2.guitar(40 + k * 3, t + k * 0.05, 0.4, 0.4); // décollage
       else if (kind === 'wg-ghost') [76, 75, 74, 73, 72].forEach((m, k) => Audio2.guitar(m, t + k * 0.3, 1.5, 0.25)); // hou-hou
       else if (kind === 'wg-upside') [64, 59, 55, 50, 45, 40].forEach((m, k) => Audio2.guitar(m, t + k * 0.04, 1.6, 0.45)); // accord à l'envers
       else for (let k = 0; k < 6; k++) Audio2.guitar(40 + Math.floor(Math.random() * 36), t + k * 0.06, 1.2, 0.35); // n'importe quoi
     } catch (e) { /* pas de son */ }
+  }
+
+  /** Petite bulle de texte au-dessus d'une guitare. */
+  function say(card, text) {
+    const old = card.querySelector('.wg-say');
+    if (old) old.remove();
+    const b = h('div', { class: 'wg-say', text });
+    card.appendChild(b);
+    setTimeout(() => b.remove(), 2600);
   }
 
   function render(el) {
@@ -378,7 +577,9 @@
       const card = h('button', { class: 'wg-card' + (g.cls ? ' ' + g.cls : ''), title: 'Écouter' }, [svg(g.draw), h('div', { class: 'wg-name', text: g.name }), h('div', { class: 'wg-desc', text: g.desc })]);
       card.style.animationDelay = (i * 0.37) + 's';
       card.addEventListener('click', () => {
-        if (g.cls && g.cls !== 'wg-flee' && g.cls !== 'wg-rainbow') weirdSound(g.cls); else wiggle(i);
+        const snd = g.sound || (g.cls && g.cls !== 'wg-flee' && g.cls !== 'wg-rainbow' && g.cls !== 'wg-sigma' ? g.cls : null);
+        if (snd) weirdSound(snd); else wiggle(i);
+        if (g.say) say(card, g.say);
         card.classList.remove('wg-boing'); void card.offsetWidth; card.classList.add('wg-boing');
       });
       if (g.cls === 'wg-flee') {
