@@ -665,40 +665,116 @@
   /* ================================================================== */
   /* Piège : Bbm/Eb, Ab, Fm7, Bbm7                                       */
   /* ================================================================== */
-  /** Plein écran moqueur + la vraie chanson, via la vidéo officielle sur YouTube (lecteur intégré). */
+  let ytApi = null;
+  function loadYT() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    if (!ytApi) {
+      ytApi = new Promise((res, rej) => {
+        const prev = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(); };
+        const sc = document.createElement('script');
+        sc.src = 'https://www.youtube.com/iframe_api';
+        sc.onerror = () => { ytApi = null; rej(new Error('YouTube indisponible')); };
+        document.head.appendChild(sc);
+      });
+    }
+    return ytApi;
+  }
+
+  /**
+   * Le piège : d'abord un écran « normal » qui demande de lancer la vidéo pour voir les accords.
+   * Le texte moqueur et l'animation n'arrivent QUE quand la chanson a vraiment commencé
+   * (pas pendant une pub : on attend que la vidéo elle-même avance).
+   */
   function rickroll() {
     const old = document.querySelector('.rr-overlay');
     if (old) old.remove();
-    const VIDEO = 'dQw4w9WgXcQ'; // Rick Astley – Never Gonna Give You Up (clip officiel)
-    const frame = h('iframe', {
-      class: 'rr-video', title: 'Never Gonna Give You Up',
-      src: 'https://www.youtube-nocookie.com/embed/' + VIDEO + '?autoplay=1&start=0&playsinline=1&rel=0',
-      allow: 'autoplay; encrypted-media; picture-in-picture', allowfullscreen: ''
-    });
+    const VIDEO = 'dQw4w9WgXcQ'; // Rick Astley – Never Gonna Give You Up (clip officiel, ~3 min 32)
+    let player = null, timer = null, started = false;
+
     const emojis = ['🫵', '😂', '🤣', '💀', '🫵', '😭', '🤡', '😂', '🫵', '🤣', '🕺', '😂'];
-    const rain = h('div', { class: 'rr-rain' }, Array.from({ length: 28 }, (_, i) => {
-      const e = h('span', { text: emojis[i % emojis.length] });
-      e.style.left = (Math.random() * 100) + '%';
-      e.style.animationDelay = (Math.random() * 3) + 's';
-      e.style.animationDuration = (2.5 + Math.random() * 2.5) + 's';
-      e.style.fontSize = (1.6 + Math.random() * 2.4) + 'rem';
-      return e;
-    }));
-    const close = h('button', { class: 'rr-close', text: '✕ OK, je me suis fait avoir 😭' });
-    const ov = h('div', { class: 'rr-overlay', role: 'dialog', 'aria-label': 'Rickroll' }, [
-      rain,
-      h('div', { class: 'rr-box' }, [
-        h('div', { class: 'rr-point', text: '🫵😂' }),
-        h('div', { class: 'rr-title', text: 'RICKROLL YOU DUMASS' }),
-        h('div', { class: 'rr-sub', text: '🫵😂🤣💀  Bbm/Eb – Ab – Fm7 – Bbm7… tu croyais vraiment que c’était du jazz ?  🤡😂🫵' }),
-        frame,
-        h('p', { class: 'rr-hint', text: 'Pas de son ? Appuie sur ▶ dans la vidéo (ton appareil bloque peut-être la lecture automatique).' }),
-        close
-      ])
+    const rain = h('div', { class: 'rr-rain' });
+    const holder = h('div', { class: 'rr-video' }, [h('div', { id: 'rr-player' })]);
+    // cache par-dessus la vidéo (on ne voit pas la miniature avant de lancer)
+    const playBtn = h('button', { class: 'rr-play', html: '▶<span>Voir les accords</span>' });
+    const cover = h('div', { class: 'rr-cover' }, [
+      h('div', { class: 'rr-cover-title', text: '🎸 Tuto vidéo : Bbm/Eb – Ab – Fm7 – Bbm7' }),
+      playBtn
     ]);
-    close.addEventListener('click', () => ov.remove());
-    window.addEventListener('hashchange', () => ov.remove(), { once: true });
+    holder.appendChild(cover);
+    const bait = h('div', { class: 'rr-bait' }, [
+      h('div', { class: 'rr-bait-title', text: '🎵 Tes accords sont prêts !' }),
+      h('p', { text: 'Lance la vidéo pour voir comment jouer ces accords sur la guitare 👇' })
+    ]);
+    const troll = h('div', { class: 'rr-troll' }, [
+      h('div', { class: 'rr-point', text: '🫵😂' }),
+      h('div', { class: 'rr-title', text: 'RICKROLL YOU DUMASS' }),
+      h('div', { class: 'rr-sub', text: '🫵😂🤣💀  Bbm/Eb – Ab – Fm7 – Bbm7… tu croyais vraiment que c’était du jazz ?  🤡😂🫵' })
+    ]);
+    const hint = h('p', { class: 'rr-hint', text: '' });
+    const close = h('button', { class: 'rr-close', text: '✕ Fermer' });
+    const ov = h('div', { class: 'rr-overlay', role: 'dialog', 'aria-label': 'Vidéo' }, [rain, h('div', { class: 'rr-box' }, [bait, troll, holder, hint, close])]);
+
+    function boom() {
+      if (started) return;
+      started = true;
+      clearInterval(timer);
+      ov.classList.add('rr-on');
+      close.textContent = '✕ OK, je me suis fait avoir 😭';
+      for (let i = 0; i < 28; i++) {
+        const e = h('span', { text: emojis[i % emojis.length] });
+        e.style.left = (Math.random() * 100) + '%';
+        e.style.animationDelay = (Math.random() * 3) + 's';
+        e.style.animationDuration = (2.5 + Math.random() * 2.5) + 's';
+        e.style.fontSize = (1.6 + Math.random() * 2.4) + 'rem';
+        rain.appendChild(e);
+      }
+    }
+    function cleanup() {
+      clearInterval(timer);
+      try { if (player && player.destroy) player.destroy(); } catch (e) { /* rien */ }
+      ov.remove();
+    }
+    close.addEventListener('click', cleanup);
+    window.addEventListener('hashchange', cleanup, { once: true });
     document.body.appendChild(ov);
+
+    // la chanson a-t-elle vraiment commencé ? (une pub ne fait pas avancer la vidéo elle-même)
+    let lastT = -1;
+    function watch() {
+      clearInterval(timer);
+      timer = setInterval(() => {
+        if (!document.body.contains(ov)) { clearInterval(timer); return; }
+        if (!player || !player.getPlayerState) return;
+        let st, t, d, id;
+        try { st = player.getPlayerState(); t = player.getCurrentTime(); d = player.getDuration(); id = (player.getVideoData() || {}).video_id; } catch (e) { return; }
+        const isSong = (!id || id === VIDEO) && d > 180 && d < 260;
+        if (st === 1 && isSong && t > 0.3 && lastT >= 0 && t > lastT) boom();
+        lastT = st === 1 && isSong ? t : -1;
+      }, 250);
+    }
+
+    loadYT().then(() => {
+      player = new YT.Player('rr-player', {
+        videoId: VIDEO, width: '100%', height: '100%',
+        playerVars: { rel: 0, playsinline: 1, modestbranding: 1, controls: 1 },
+        events: { onStateChange: watch }
+      });
+      watch();
+    }).catch(() => {
+      // pas d'API YouTube : simple lecteur intégré ; l'animation part peu après le clic
+      holder.querySelector('#rr-player').replaceWith(h('iframe', {
+        src: 'https://www.youtube.com/embed/' + VIDEO + '?playsinline=1&rel=0',
+        allow: 'autoplay; encrypted-media', allowfullscreen: '', title: 'Vidéo'
+      }));
+    });
+
+    playBtn.addEventListener('click', () => {
+      cover.remove();
+      try { if (player && player.playVideo) player.playVideo(); } catch (e) { /* rien */ }
+      hint.textContent = 'Si la vidéo ne démarre pas toute seule, appuie sur ▶ dans la vidéo.';
+      if (!player) setTimeout(boom, 4000); // sans API, on ne peut pas savoir : on attend un peu
+    });
   }
 
   function render(el) {

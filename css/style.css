@@ -505,13 +505,24 @@ table.simple th, table.simple td { border-bottom: 1px solid var(--border); paddi
 @media (prefers-reduced-motion: reduce) { .wg-hand-l, .wg-hand-r, .wg-trail, .wg-star { animation: none; } }
 
 /* ---------- Piège Rickroll ---------- */
-.rr-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(10, 8, 20, .97); display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
-.rr-box { position: relative; z-index: 2; text-align: center; max-width: 720px; width: 100%; }
+.rr-overlay { position: fixed; inset: 0; z-index: 1000; background: #0f0f12; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+.rr-box { position: relative; z-index: 2; margin: auto; text-align: center; max-width: 720px; width: 100%; color: #f1f3f5; }
+.rr-bait-title { font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 800; }
+.rr-bait p { margin: .3rem 0 .9rem; color: #ced4da; }
+.rr-troll { display: none; }
+.rr-on .rr-bait { display: none; }
+.rr-on .rr-troll { display: block; }
 .rr-point { font-size: clamp(3rem, 14vw, 7rem); line-height: 1; animation: rr-shake .35s ease-in-out infinite alternate; }
 .rr-title { font: 900 clamp(2rem, 9vw, 5rem)/1.05 'Arial Black', Arial, sans-serif; letter-spacing: .02em; margin: .3em 0; color: #fff; text-shadow: 4px 4px 0 #e03131, -3px -3px 0 #1971c2; animation: rr-pulse .6s ease-in-out infinite alternate, rr-hue 2s linear infinite; }
 .rr-sub { color: #ffe066; font-weight: 800; font-size: clamp(.95rem, 3.5vw, 1.3rem); margin-bottom: 14px; }
-.rr-video { width: 100%; aspect-ratio: 16 / 9; border: 4px solid #fff; border-radius: 12px; background: #000; }
-.rr-hint { color: #ced4da; font-size: .8rem; margin: 6px 0 12px; }
+.rr-video { position: relative; width: 100%; aspect-ratio: 16 / 9; border: 3px solid #495057; border-radius: 12px; background: #000; overflow: hidden; }
+.rr-on .rr-video { border-color: #fff; }
+.rr-video iframe, .rr-video > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.rr-cover { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: linear-gradient(135deg, #1d1b18, #343a40); }
+.rr-cover-title { font-weight: 800; color: #fff; font-size: clamp(1rem, 4vw, 1.4rem); padding: 0 10px; }
+.rr-play { display: inline-flex; align-items: center; gap: 10px; font: 800 1.1rem system-ui, sans-serif; border: 0; border-radius: 999px; background: #e03131; color: #fff; padding: 12px 22px; cursor: pointer; }
+.rr-play span { font-size: 1rem; }
+.rr-hint { color: #adb5bd; font-size: .8rem; margin: 6px 0 12px; min-height: 1em; }
 .rr-close { font: inherit; font-weight: 800; border: 0; border-radius: 999px; padding: 10px 20px; background: #fff; color: #1d1b18; cursor: pointer; }
 .rr-rain { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .rr-rain span { position: absolute; top: -3rem; animation: rr-fall linear infinite; }
